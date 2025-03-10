@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "cmath": "c",
+        "complex": "c",
+        "cstdlib": "c",
+        "time.h": "c"
+    }
+}

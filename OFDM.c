@@ -4,19 +4,18 @@
 #include <math.h>
 #include <string.h>
 #include <complex.h>  // Required for complex numbers
+#include <time.h>
 
 #define N_FFT 64
 
 #define PI 3.14159265358979323846
 
-int len_Tx_Signal = 0;
-
-unsigned char message[] = "The Supreme Lord Shree Krishna said: I taught this eternal science of Yog to the Sun God, Vivasvan, who passed it on to Manu; and Manu, in turn, instructed it to Ikshvaku.";
-
-//"The Supreme Lord Shree Krishna said: I taught this eternal science of Yog to the Sun God, Vivasvan, who passed it on to Manu; and Manu, in turn, instructed it to Ikshvaku.";
+int len_Tx_Signal = 0, data_frames_number = 0, Data_Frame_Size = 0; // Used for Up Sampling and Down Sampling
 
 double RRC_Filter_Tx[21] = {-0.000454720514876223, 0.00353689555574986, -0.00714560809091226, 0.00757906190517828, 0.00214368242727367, -0.0106106866672496, 0.0300115539818315, -0.0530534333362480, -0.0750288849545787, 0.409168714634052, 0.803738600397980, 0.409168714634052, -0.0750288849545787, -0.0530534333362480, 0.0300115539818315, -0.0106106866672496, 0.00214368242727367, 0.00757906190517828, -0.00714560809091226, 0.00353689555574986, -0.000454720514876223};
 
+int len_RRC_Coeff = 21;
+int len_RRC_rx = 10;
 
 // Cyclically Shifts frequency domain array before discrete ifft
 void ifft_shift(complex double *X) 
@@ -62,6 +61,17 @@ void Slice_Repeater(complex double *X, complex double *Y, int starti, int lo, in
             Y[index] = X[j];
             index++;
         }        
+    }
+}
+
+void Convolution (complex double *Out, double *impulse, complex double *In, int lenOut, int lenImp)
+{
+    for(int i = 0; i < lenOut; ++i)
+    {
+        for(int j = 0; j < lenImp; ++j)
+        {
+            Out[i] += impulse[j] * In[i + j - 1];
+        }
     }
 }
 
@@ -121,7 +131,7 @@ void Preamble_Generator(double scale, double complex *P_k, double complex *virtu
 
     if(type == 0) // Short Preamble
         Slice_Repeater(preamble_time, Preamble, 0, 0, 16, 10);
-    else
+    else//long preamble
     {
         Slice_Repeater(preamble_time, Preamble, 0, 32, N_FFT, 1);
         Slice_Repeater(preamble_time, Preamble, 32, 0, N_FFT, 2);
@@ -140,14 +150,14 @@ complex double* Allocate_Array_1D(int size) {
 }
 
 // Function to allocate a 2D array of complex double
-complex double** Allocate_Array_2D(int rows, int cols) {
-    complex double **array = (complex double **)malloc(rows * sizeof(complex double *));
+complex double** Allocate_Array_2D(int data_frames_number, int cols) {
+    complex double **array = (complex double **)malloc(data_frames_number * sizeof(complex double *));
     if (array == NULL) {
         printf("Memory allocation failed for 2D array (row pointers)!\n");
         exit(1);
     }
 
-    for (int i = 0; i < rows; i++) {
+    for (int i = 0; i < data_frames_number; i++) {
         array[i] = (complex double *)calloc(cols, sizeof(complex double));
         if (array[i] == NULL) {
             printf("Memory allocation failed for 2D array (row %d)!\n", i);
@@ -171,9 +181,9 @@ void Decimal_To_Binary(int msg, int* msg_bits)
     }
 }
 
-void QPSK_Modulator(complex double **Data_Payload, complex double **Data_Payload_Mod, int rows)
+void QPSK_Modulator(complex double **Data_Payload, complex double **Data_Payload_Mod, int data_frames_number)
 {
-    for(int i = 0; i < rows; ++i)
+    for(int i = 0; i < data_frames_number; ++i)
     {
         for(int j = 0; j < 96; j += 2)
         {
@@ -191,8 +201,48 @@ void QPSK_Modulator(complex double **Data_Payload, complex double **Data_Payload
     }
 }
 
-complex double *Transmitter()
+complex double* Data_Generator()
 {
+    unsigned char message[] = "AAAAAAAAAAAAAAA";
+    //"The Supreme Lord Shree Krishna said: I taught this eternal science of Yog to the Sun God, Vivasvan, who passed it on to Manu; and Manu, in turn, instructed it to Ikshvaku.";
+
+    int message_size = sizeof(message)/sizeof(message[0]) - 1;
+
+    data_frames_number = ceil(8 * message_size / 96.0); 
+
+    int total_bits = data_frames_number * 96;
+
+    complex double *Data = Allocate_Array_1D(total_bits);
+
+    if (Data == NULL) 
+    {
+        printf("Memory allocation failed!\n");
+        return NULL;
+    }
+
+    // Encoder 
+    int msg_bits[8] = {0};
+
+    int index = 0;
+
+    for(int i = 0; i < message_size; ++i) //convert each character to 8bit binary and store in data array
+    {
+        Decimal_To_Binary(message[i], msg_bits);
+
+        for(int j = 0; j < 8; ++j)
+        {
+            Data[index] = msg_bits[j];
+            index++;
+        }
+    }    
+
+    return Data;
+}
+
+complex double *Transmitter() // Functions Used: Data_Generator(), Preamble_Generator(), IFFT(), QPSK_Modulator(), Slice_Repeater(), Convoulation()
+{
+    complex double* Data = Data_Generator(); // Global Variable: Data_Frames_Number = rows of data of size 96
+
     double complex Short_Preamble[160], Long_Preamble[160];
 
     // Scale Factor
@@ -209,7 +259,7 @@ complex double *Transmitter()
     1 + 1*I, 0, 0, 0, 1 + 1*I, 0, 0
     };
 
-    Preamble_Generator(scale, S_k, virtual_subcarrier, Short_Preamble, 0);
+    Preamble_Generator(scale, S_k, virtual_subcarrier, Short_Preamble, 0); //0 is short, 1 is long
 
     double complex L_k[53] ={1,1,-1,-1,1,1,-1,1,-1,1,1,1,1,1,1,-1,-1,1,1,-1,1,-1,1,1,1,1,0,1,-1,-1,1,1,-1,1,-1,1,-1,-1,-1,-1,-1,1,1,-1,-1,1,-1,1,-1,1,1,1,1};
 
@@ -220,43 +270,16 @@ complex double *Transmitter()
     // Preparing Payload
 
     int M = 4; // QPSK modulation
-    int bits_per_symb = log2(M); // Bits per symbol
+    int bits_per_symb = log2(M); // Bits per symbol =2 (have to make pairs later)
     int n_bits = 96; // Number of bits in one frame
 
-    int message_size = sizeof(message)/sizeof(message[0]) - 1; // removing null character from message size
-    int rows = ceil(8 * message_size / 96.0);
-
-    int total_bits = rows * 96;
-
-    complex double *Data = Allocate_Array_1D(total_bits);
-
-    if (Data == NULL) 
-    {
-        printf("Memory allocation failed!\n");
-        return NULL;
-    }
-
-    // Encoder 
-    int msg_bits[8] = {0};
-
-    int index = 0;
-
-    for(int i = 0; i < message_size; ++i)
-    {
-        Decimal_To_Binary(message[i], msg_bits);
-
-        for(int j = 0; j < 8; ++j)
-        {
-            Data[index] = msg_bits[j];
-            index++;
-        }
-    }
+    
 
     // Creating Data Payloads
 
-    complex double **Data_Payload = Allocate_Array_2D(rows, 96);
+    complex double **Data_Payload = Allocate_Array_2D(data_frames_number, 96);
 
-    for(int i = 0; i < rows; ++i)
+    for(int i = 0; i < data_frames_number; ++i)
     {
         int row_start = i * 96;
         for(int j = 0; j < 96; ++j)
@@ -267,16 +290,16 @@ complex double *Transmitter()
 
     // Combining consecutive bits for QPSK modulation: Creating 1 X 48 complex numbers from 1 * 2 real numbers
 
-    complex double **Data_Payload_Mod = Allocate_Array_2D(rows, 48);
+    complex double **Data_Payload_Mod = Allocate_Array_2D(data_frames_number, 48);
 
-    QPSK_Modulator(Data_Payload, Data_Payload_Mod, rows);
+    QPSK_Modulator(Data_Payload, Data_Payload_Mod, data_frames_number);
 
-    // Data Frames
+    // Data Frames Generation
 
     int pilot[] = {1,1,1,-1};
-    complex double **Data_Frames = Allocate_Array_2D(rows, 64);
+    complex double **Data_Frames = Allocate_Array_2D(data_frames_number, 64);
 
-    for(int i = 0; i < rows; ++i)
+    for(int i = 0; i < data_frames_number; ++i)
     {
         Slice_Repeater(virtual_subcarrier, Data_Frames[i], 0, 0, 6, 1); // Filled = 6
 
@@ -300,22 +323,22 @@ complex double *Transmitter()
         Slice_Repeater(virtual_subcarrier, Data_Frames[i], 59, 6, 11, 1); // Filled = 64     
     }
 
-    complex double **Data_Frames_IFFT = Allocate_Array_2D(rows, 64);
+    complex double **Data_Frames_IFFT = Allocate_Array_2D(data_frames_number, 64);
 
-    for(int i = 0; i < rows; ++i)
+    for(int i = 0; i < data_frames_number; ++i)
     {
         ifft(Data_Frames[i], Data_Frames_IFFT[i]);
     }
 
-    complex double **Data_Frames_Time_TX = Allocate_Array_2D(rows, 80);
+    complex double **Data_Frames_Time_TX = Allocate_Array_2D(data_frames_number, 80);
 
-    for(int i = 0; i < rows; ++i)
+    for(int i = 0; i < data_frames_number; ++i)
     {
         Slice_Repeater(Data_Frames_IFFT[i], Data_Frames_Time_TX[i], 0, 48, 64, 1);
         Slice_Repeater(Data_Frames_IFFT[i], Data_Frames_Time_TX[i], 16, 0, 64, 1);
     }
 
-    int Data_Frame_Size = rows * 80 + 160 + 160;
+    Data_Frame_Size = data_frames_number * 80 + 160 + 160;
     complex double *Data_Frame_TX = Allocate_Array_1D(Data_Frame_Size);
 
     Slice_Repeater(Short_Preamble, Data_Frame_TX, 0, 0, 160, 1);   // Filled = 160
@@ -323,44 +346,37 @@ complex double *Transmitter()
 
     int start = 320;
 
-    for(int i = 0; i < rows; ++i)
+    for(int i = 0; i < data_frames_number; ++i)
     {
         Slice_Repeater(Data_Frames_Time_TX[i], Data_Frame_TX, start, 0, 80, 1);
         start += 80;
     }
 
-    complex double *Data_Frame_TX_Oversamp = Allocate_Array_1D(2*Data_Frame_Size);
+    // Oversampling 
+
+    int oversampling_rate_tx = 2; 
+
+    complex double *Data_Frame_TX_Oversamp = Allocate_Array_1D(oversampling_rate_tx * Data_Frame_Size);
 
     for(int i = 0; i < Data_Frame_Size; ++i)
     {
         Data_Frame_TX_Oversamp[2*i] = Data_Frame_TX[i];
         Data_Frame_TX_Oversamp[2*i + 1] = 0;
     }  
-
-    // Root Raised Cosine filter (Rx)
-
-    double rolloff_factor_rx = 0.5;
-    int length_rrc_rx = 10; 
-    int oversampling_rate_rx = 2; 
     
     // Convoulation of the Tx Frame with RRC Filter
 
     int len_inp_sig = 2*Data_Frame_Size;
-    int len_coeff = 21; 
-    int len_out_sig = len_inp_sig + len_coeff - 1; 
+  
+    int len_out_sig = len_inp_sig + len_RRC_Coeff - 1; 
 
-    complex double *inp_signal_padded = Allocate_Array_1D(len_inp_sig + 2 * (len_coeff - 1));
-    Slice_Repeater(Data_Frame_TX_Oversamp, inp_signal_padded, 20, 0, len_inp_sig, 1);
+    complex double *inp_signal_padded = Allocate_Array_1D(len_inp_sig + 2 * (len_RRC_Coeff - 1));
+
+    Slice_Repeater(Data_Frame_TX_Oversamp, inp_signal_padded, len_RRC_Coeff - 1, 0, len_inp_sig, 1);
 
     complex double *Tx_signal = Allocate_Array_1D(len_out_sig);
 
-    for(int i = 0; i < len_out_sig; ++i)
-    {
-        for(int j = 0; j < len_coeff; ++j)
-        {
-            Tx_signal[i] += RRC_Filter_Tx[j] * inp_signal_padded[i + j - 1];
-        }
-    }
+    Convolution(Tx_signal,RRC_Filter_Tx,inp_signal_padded, len_out_sig, len_RRC_Coeff);
 
     int len_out_signal_repeated = 10 * len_out_sig;
     complex double *Tx_signal_repeated = Allocate_Array_1D(len_out_signal_repeated);
@@ -378,21 +394,22 @@ double gaussian_noise(double mean, double variance) {
     u1 = ((double) rand() + 1.0) / ((double) RAND_MAX + 1.0);
     u2 = ((double) rand() + 1.0) / ((double) RAND_MAX + 1.0);
 
-    z0 = sqrt(-2.0 * log(u1)) * cos(2.0 * PI * u2);
+    z0 = sqrt(-2.0 * log(u1)) * cos(2.0 * 3.14159 * u2);
 
     return mean + sqrt(variance) * z0;
 }
 
-complex double* Transmission_Over_Air(complex double* TX_signal, double snr)
+
+complex double* Transmission_Over_Air(complex double* TX_signal, double snr, int len_Tx_Signal)
 {
     complex double* TX_OTA_signal = Allocate_Array_1D(len_Tx_Signal); 
 
     double Tx_signal_power = 0.0;
     for (int i = 0; i < len_Tx_Signal; i++) 
     {
-        Tx_signal_power += sqrt(cabs(TX_signal[i]));
+        Tx_signal_power += (cabs(TX_signal[i])*cabs(TX_signal[i]));
     }
-    Tx_signal_power /= len_Tx_Signal;  // Mean power
+    Tx_signal_power /= len_Tx_Signal; 
 
     double snr_linear = pow(10, Tx_signal_power / 10);
 
@@ -406,19 +423,178 @@ complex double* Transmission_Over_Air(complex double* TX_signal, double snr)
     return TX_OTA_signal;
 }
 
-void Receiver()
+complex double* Packet_Detection(complex double *Rx_Signal, int len_RX_Signal, int* len_Corr_Out)
 {
+
+    int delay_param= 16;
+    int window_length =32;
+    int lenCorr_arr = len_RX_Signal-delay_param+1-window_length;
+
+    complex double* corr_out = Allocate_Array_1D(lenCorr_arr);
+
+    complex double corr_temp_arr = 0;
+    complex double peak_temp_arr = 0;
+
+    for (int i=0;i<lenCorr_arr;++i)
+    {
+        for (int k=0;k<window_length;++k)
+        {
+            corr_temp_arr += Rx_Signal[i+k-1]*Rx_Signal[i+k-1+delay_param];
+            peak_temp_arr += abs(Rx_Signal[i+k-1+delay_param]*Rx_Signal[i+k-1+delay_param]);
+        }  
+        corr_out[i] = ( abs(corr_temp_arr) * abs(corr_temp_arr) ) / ( abs(peak_temp_arr) * abs(peak_temp_arr) );
+    }
+
+    *len_Corr_Out = lenCorr_arr;
+    return corr_out;   
+}
+
+int Packet_Selection(complex double* Corr_Out, int len_Corr_Out)
+{
+    double packet_threshold = 0.75;
+    complex double *packet_idx_arr = Allocate_Array_1D(len_Corr_Out);
+    int idx_count = 0;
+
+    for (int i=0;i<len_Corr_Out;++i)
+    {
+        if(abs(Corr_Out[i])>packet_threshold)
+        {
+            idx_count+=1;
+            packet_idx_arr[idx_count]=i;
+        }
+
+    }
+    Slice_Repeater(packet_idx_arr,packet_idx_arr,0,0,idx_count,1);
+    complex double *temp1 = Allocate_Array_1D(idx_count+1);
+    complex double *temp2 = Allocate_Array_1D(idx_count+1);
+    complex double *temp3 = Allocate_Array_1D(idx_count+1);
+
+    Slice_Repeater(packet_idx_arr,temp1,0,0,idx_count,1);
+    Slice_Repeater(packet_idx_arr,temp2,1,0,idx_count,1);
+
+    for(int j=0;j<idx_count+1;++j)
+    {
+        temp3[j] = temp1[j] - temp2[j];
+    }
+
+    complex double *packet_front = Allocate_Array_1D(idx_count+1);
+    int packet_front_count =0;
+
+    for(int j=0;j<idx_count+1;++j)
+    {
+        if(abs(temp3[j])>300)
+        {
+            packet_front_count+=1;
+            packet_front[packet_front_count] =j;
+
+
+        }
+    }
+
+    Slice_Repeater(packet_front,packet_front,0,0,packet_front_count,1);
+    complex double *packet_front_idx = Allocate_Array_1D(packet_front_count);
+
+    for (int i =0;i<packet_front_count;++i)
+    {
+        packet_front_idx[i] = packet_idx_arr[abs(packet_front[i])];
+
+    }
+
+
+    int threshold_length=230, packet_idx = 0;
+
+    for (int x=0;x<packet_front_count-1;++x)
+    {
+        if(abs(Corr_Out[abs(packet_front_idx[x])+230])>threshold_length)
+        {
+            packet_idx = packet_front_idx[x] + len_RRC_rx+1;
+            break;
+        }
+    }
+
+    return packet_idx;
+}
+
+void Receiver(complex double* Tx_OTA_signal, int len_Tx_Signal, int data_frames_number)
+{
+    // Capturing Packets
+
+    int len_Rx_Signal = len_Tx_Signal * 0.307; // Number of packets Captured
+
+    printf("\n%d", len_Rx_Signal);    
+
+    int rx_start = rand() % (len_Tx_Signal - len_Rx_Signal);
+
+    complex double* Rx_Signal = Allocate_Array_1D(len_Rx_Signal);
+
+    Slice_Repeater(Tx_OTA_signal, Rx_Signal, 0, 0, len_Rx_Signal, 1);
+
+    // Padding Signal
+
+    int len_inp_sig = len_Rx_Signal;
+  
+    int len_out_sig = len_inp_sig + len_RRC_Coeff - 1; 
+
+    complex double *inp_signal_padded = Allocate_Array_1D(len_inp_sig + 2 * (len_RRC_Coeff - 1));
+
+    Slice_Repeater(Rx_Signal, inp_signal_padded, len_RRC_Coeff - 1, 0, len_inp_sig, 1);
+
+    complex double *Rx_filter_signal = Allocate_Array_1D(len_out_sig);
+
+    // Convoulation
+
+    Convolution(Rx_filter_signal,RRC_Filter_Tx,inp_signal_padded, len_out_sig, len_RRC_Coeff);
+
+    // Packet Detection
+
+    int len_Corr_Out = 0;
+
+    complex double *Corr_Out = Packet_Detection(Rx_Signal, len_out_sig, &len_Corr_Out);
+
+    // Packet Selection
+
+    int packet_idx = Packet_Selection(Corr_Out, len_Corr_Out);
+
+
+    // Down Sampling
+
+    int oversampling_rate = 2;
+
+    complex double* rx_frame = Allocate_Array_1D(oversampling_rate * Data_Frame_Size + packet_idx - 1);
+
+    int index = 0;
+
+    for(int i = packet_idx; i < oversampling_rate * Data_Frame_Size + packet_idx - 1; i += oversampling_rate)
+    {
+        rx_frame[index] = Rx_filter_signal[i];
+    } 
     
 }
 
 
 int main() 
 {
+    srand(time(NULL));
+
     complex double* TX_signal = Transmitter();
 
     printf("%d", len_Tx_Signal);
 
-    complex double* Tx_OTA_signal = Transmission_Over_Air(TX_signal, 100);
+    int num_snr = 20;
+
+    double SNR[num_snr];
+
+    for(int i = 0; i < num_snr; ++i)
+    {
+        SNR[i] = i;
+    }
+
+    for(int i = 0; i < 2; ++i)
+    {
+        complex double* Tx_OTA_signal = Transmission_Over_Air(TX_signal, SNR[i], len_Tx_Signal);
+
+        Receiver(Tx_OTA_signal, len_Tx_Signal, data_frames_number);
+    }
 
     return 0;    
 }
