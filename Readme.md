@@ -1,8 +1,6 @@
 Hello, this is the implementation of IEEE 802.11 Wireless Communication System as part of our AELD Project.
 
-The last commit contains, the transmitter and the implementation of the over the air transmission for a given SNR.
-
-The Receiver is yet to be completed.
+Transmitter has been completed. Receiver has been partially completed.
 
 The project members are:
 
