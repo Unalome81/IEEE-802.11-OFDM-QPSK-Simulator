@@ -12,6 +12,10 @@
 
 int len_Tx_Signal = 0, data_frames_number = 0, Data_Frame_Size = 0; // Used for Up Sampling and Down Sampling
 
+// data_frames_number = number of payloads
+
+complex double *Data = NULL; // This is where all the binary data is stored
+
 double RRC_Filter_Tx[21] = {-0.000454720514876223, 0.00353689555574986, -0.00714560809091226, 0.00757906190517828, 0.00214368242727367, -0.0106106866672496, 0.0300115539818315, -0.0530534333362480, -0.0750288849545787, 0.409168714634052, 0.803738600397980, 0.409168714634052, -0.0750288849545787, -0.0530534333362480, 0.0300115539818315, -0.0106106866672496, 0.00214368242727367, 0.00757906190517828, -0.00714560809091226, 0.00353689555574986, -0.000454720514876223};
 
 int len_RRC_Coeff = 21;
@@ -201,7 +205,7 @@ void QPSK_Modulator(complex double **Data_Payload, complex double **Data_Payload
     }
 }
 
-complex double* Data_Generator()
+void Data_Generator()
 {
     unsigned char message[] = "AAAAAAAAAAAAAAA";
     //"The Supreme Lord Shree Krishna said: I taught this eternal science of Yog to the Sun God, Vivasvan, who passed it on to Manu; and Manu, in turn, instructed it to Ikshvaku.";
@@ -212,12 +216,12 @@ complex double* Data_Generator()
 
     int total_bits = data_frames_number * 96;
 
-    complex double *Data = Allocate_Array_1D(total_bits);
+    Data = Allocate_Array_1D(total_bits);
 
     if (Data == NULL) 
     {
         printf("Memory allocation failed!\n");
-        return NULL;
+        return;
     }
 
     // Encoder 
@@ -235,13 +239,11 @@ complex double* Data_Generator()
             index++;
         }
     }    
-
-    return Data;
 }
 
 complex double *Transmitter() // Functions Used: Data_Generator(), Preamble_Generator(), IFFT(), QPSK_Modulator(), Slice_Repeater(), Convoulation()
 {
-    complex double* Data = Data_Generator(); // Global Variable: Data_Frames_Number = rows of data of size 96
+    Data_Generator(); // This function initalizes Data array, data frames number and data frames size 
 
     double complex Short_Preamble[160], Long_Preamble[160];
 
