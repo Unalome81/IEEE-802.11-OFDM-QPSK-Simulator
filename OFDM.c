@@ -462,25 +462,26 @@ complex double* Packet_Detection(complex double *Rx_Signal, int len_RX_Signal, i
 {
 
     int delay_param= 16;
-    int window_length =32;
-    int lenCorr_arr = len_RX_Signal-delay_param+1-window_length;
+    int window_length = 32;
+    int lenCorr_arr = len_RX_Signal - delay_param + 1 - window_length;
 
     complex double* corr_out = Allocate_Array_1D(lenCorr_arr);
 
-    complex double corr_temp_arr = 0;
-    complex double peak_temp_arr = 0;
-
-    for (int i=0;i<lenCorr_arr;++i)
+    for (int i = 0;i < lenCorr_arr; ++i)
     {
-        for (int k=0;k<window_length;++k)
+        complex double corr_temp_arr = 0;
+        complex double peak_temp_arr = 0;
+
+        for (int k = 0; k < window_length; ++k)
         {
-            corr_temp_arr += Rx_Signal[i+k-1]*Rx_Signal[i+k-1+delay_param];
-            peak_temp_arr += abs(Rx_Signal[i+k-1+delay_param]*Rx_Signal[i+k-1+delay_param]);
+            corr_temp_arr += Rx_Signal[i + k] * Rx_Signal[i + k + delay_param];
+            peak_temp_arr += cabs(Rx_Signal[i + k + delay_param]) *  cabs(Rx_Signal[i + k + delay_param]);
         }  
-        corr_out[i] = ( abs(corr_temp_arr) * abs(corr_temp_arr) ) / ( abs(peak_temp_arr) * abs(peak_temp_arr) );
+        corr_out[i] = ( cabs(corr_temp_arr) * cabs(corr_temp_arr) ) / (peak_temp_arr * peak_temp_arr);
     }
 
     *len_Corr_Out = lenCorr_arr;
+
     return corr_out;   
 }
 
@@ -492,46 +493,61 @@ int Packet_Selection(complex double* Corr_Out, int len_Corr_Out)
 
     for (int i=0;i<len_Corr_Out;++i)
     {
-        if(abs(Corr_Out[i])>packet_threshold)
+        if(cabs(Corr_Out[i])>packet_threshold)
         {
-            idx_count+=1;
             packet_idx_arr[idx_count]=i;
+            idx_count += 1;
         }
 
     }
-    Slice_Repeater(packet_idx_arr,packet_idx_arr,0,0,idx_count,1);
-    complex double *temp1 = Allocate_Array_1D(idx_count+1);
-    complex double *temp2 = Allocate_Array_1D(idx_count+1);
-    complex double *temp3 = Allocate_Array_1D(idx_count+1);
 
-    Slice_Repeater(packet_idx_arr,temp1,0,0,idx_count,1);
-    Slice_Repeater(packet_idx_arr,temp2,1,0,idx_count,1);
+    complex double *packet_idx_arr_sliced = Allocate_Array_1D(idx_count);
 
-    for(int j=0;j<idx_count+1;++j)
+    Slice_Repeater(packet_idx_arr,packet_idx_arr_sliced,0,0,idx_count,1);
+
+
+    complex double *temp = Allocate_Array_1D(idx_count+1);
+
+    int a = 0, b = 0;
+
+    for(int i = 0; i < idx_count + 1; ++i)
     {
-        temp3[j] = temp1[j] - temp2[j];
+        if(i < idx_count)
+            a = packet_idx_arr_sliced[i];
+        else 
+            a = -1;
+
+        if(i - 1 >= 0)
+            b = packet_idx_arr_sliced[i - 1];
+        else 
+            b = -1;
+
+        temp[i] = a-b;
     }
 
     complex double *packet_front = Allocate_Array_1D(idx_count+1);
-    int packet_front_count =0;
+    int packet_front_count = 0;
 
     for(int j=0;j<idx_count+1;++j)
     {
-        if(abs(temp3[j])>300)
+        if(creal(temp[j])>300)
         {
-            packet_front_count+=1;
-            packet_front[packet_front_count] =j;
-
+            packet_front[packet_front_count] = j;
+            packet_front_count += 1;
 
         }
     }
 
-    Slice_Repeater(packet_front,packet_front,0,0,packet_front_count,1);
+
+    complex double *packet_front_sliced = Allocate_Array_1D(packet_front_count);
+
+    Slice_Repeater(packet_front,packet_front_sliced,0,0,packet_front_count,1);
+
     complex double *packet_front_idx = Allocate_Array_1D(packet_front_count);
 
-    for (int i =0;i<packet_front_count;++i)
+    for (int i = 0;i<packet_front_count;++i)
     {
-        packet_front_idx[i] = packet_idx_arr[abs(packet_front[i])];
+        packet_front_idx[i] = packet_idx_arr_sliced[(int)creal(packet_front_sliced[i])];
 
     }
 
@@ -540,7 +556,7 @@ int Packet_Selection(complex double* Corr_Out, int len_Corr_Out)
 
     for (int x=0;x<packet_front_count-1;++x)
     {
-        if(abs(Corr_Out[abs(packet_front_idx[x])+230])>threshold_length)
+        if(cabs(Corr_Out[(int)creal(packet_front_idx[x])+230])>packet_threshold)
         {
             packet_idx = packet_front_idx[x] + len_RRC_rx+1;
             break;
@@ -556,11 +572,16 @@ void Receiver(complex double* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
     int len_Rx_Signal = len_Tx_Signal * 0.307; // Number of packets Captured
 
+    len_Rx_Signal = 3000;  // To be removed
+
     int rx_start = rand() % (len_Tx_Signal - len_Rx_Signal);
 
-    complex double* Rx_Signal = Allocate_Array_1D(len_Rx_Signal);
+    rx_start = 0; // To be removed
 
-    Slice_Repeater(Tx_OTA_signal, Rx_Signal, 0, 0, len_Rx_Signal, 1);
+    complex double* Rx_Signal = Allocate_Array_1D(len_Rx_Signal);
+    
+
+    Slice_Repeater(Tx_OTA_signal, Rx_Signal, 0, rx_start, rx_start + len_Rx_Signal, 1);
 
     // Padding Signal
 
@@ -568,33 +589,42 @@ void Receiver(complex double* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
   
     int len_out_sig = len_inp_sig + len_RRC_Coeff - 1; 
 
+    Display(Rx_Signal, len_inp_sig);
+
     // Convolution
     complex double *Rx_filter_signal = Convolution(Tx_OTA_signal, RRC_Filter_Tx, len_inp_sig, len_RRC_Coeff);
+
+    //printf("%d  " "%lf + %lf*I \n",0, creal(Rx_filter_signal[1640]), cimag(Rx_filter_signal[1640]));
+
+    //Display(Rx_filter_signal, len_out_sig);
 
     // Packet Detection
 
     int len_Corr_Out = 0;
 
-    complex double *Corr_Out = Packet_Detection(Rx_Signal, len_out_sig, &len_Corr_Out);
+    complex double *Corr_Out = Packet_Detection(Rx_Signal, len_Rx_Signal, &len_Corr_Out);
 
     // Packet Selection
 
     int packet_idx = Packet_Selection(Corr_Out, len_Corr_Out);
 
-
     // Down Sampling
 
     int oversampling_rate = 2;
 
-    complex double* rx_frame = Allocate_Array_1D(oversampling_rate * Data_Frame_Size + packet_idx - 1);
+    int rx_frame_size = ((oversampling_rate * Data_Frame_Size + packet_idx - 1) - packet_idx) / oversampling_rate + 1;
+
+    complex double* rx_frame = Allocate_Array_1D(rx_frame_size);
 
     int index = 0;
 
     for(int i = packet_idx; i < oversampling_rate * Data_Frame_Size + packet_idx - 1; i += oversampling_rate)
     {
         rx_frame[index] = Rx_filter_signal[i];
-    } 
+        index += 1;
+    }
     
+    // Display(rx_frame, rx_frame_size);    
 }
 
 
@@ -604,17 +634,18 @@ int main()
 
     complex double* TX_signal_repeated = Transmitter();
 
-    Display(TX_signal_repeated, len_Tx_Signal_repeated);
-
-    double SNR[5] = {100, 101, 102, 103, 104};
-
-    printf("\n\nCode Run Successful!");
+    double SNR[5] = {100, 100, 100, 100, 100};
 
     for(int i = 0; i < 1; ++i)
     {
         complex double* Tx_OTA_signal = Transmission_Over_Air(TX_signal_repeated, SNR[i], len_Tx_Signal_repeated);
 
-        Receiver(Tx_OTA_signal, len_Tx_Signal_repeated, data_frames_number);
+        //Display(Tx_OTA_signal, len_Tx_Signal_repeated);
+
+        Receiver(TX_signal_repeated, len_Tx_Signal_repeated, data_frames_number);
     }
+
+    printf("\n\nCode Run Successful!");
+
     return 0;    
 }
