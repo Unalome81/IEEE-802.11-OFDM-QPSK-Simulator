@@ -28,7 +28,7 @@ void ifft_shift(complex double *X)
 
     for(int i = 0; i < mid; ++i)
     {
-        int temp = X[i];
+        complex double temp = X[i];
         X[i] = X[i + mid];
         X[i + mid] = temp;
     }
@@ -100,38 +100,18 @@ void Preamble_Generator(double scale, double complex *P_k, double complex *virtu
     double complex preamble_freq[N_FFT] = {0};
     double complex preamble_time[N_FFT] = {0};
 
-    // Fill the first 6 elements with the first 6 virtual subcarriers (which are zeros)
-    for (int i = 0; i < 6; i++) {
-        preamble_freq[i] = virtual_subcarrier[i];
-    }
+    Slice_Repeater(virtual_subcarrier, preamble_freq, 0, 0, 6, 1);
+    Slice_Repeater(P_k, preamble_freq, 6, 0, 54, 1);
+    Slice_Repeater(virtual_subcarrier, preamble_freq, 59, 6, 11, 1);
     
-    // Fill the next 53 elements with P_k values
-    for (int i = 0; i < 53; i++) {
-        preamble_freq[6 + i] = P_k[i];
-    }
-    
-    // Fill the last 5 elements with the remaining virtual subcarriers (indices 6 to 10)
-    for (int i = 0; i < 5; i++) {
-        preamble_freq[6 + 53 + i] = virtual_subcarrier[6 + i];
-    }
 
-    // Print the short preamble in frequency domain
     // printf("Preamble (Frequency Domain):\n");
-    //Display(preamble_freq, N_FFT);
+    // Display(preamble_freq, N_FFT);
 
     ifft(preamble_freq, preamble_time);
 
     // printf("Preamble Shift (Time Domain):\n");
     // Display(preamble_time, N_FFT);
-    
-    // if(type == 0)
-    // {
-    //     printf("Short Preamble:\n");
-    // }
-    // else 
-    // {
-    //     printf("Long Preamble:\n");
-    // }
 
     if(type == 0) // Short Preamble
         Slice_Repeater(preamble_time, Preamble, 0, 0, 16, 10);
@@ -207,7 +187,7 @@ void QPSK_Modulator(complex double **Data_Payload, complex double **Data_Payload
 
 void Data_Generator()
 {
-    unsigned char message[] = "AAAAAAAAAAAAAAA";
+    unsigned char message[] = "AAAAAAAAAAAAAAAAAAAAAAAA";
     //"The Supreme Lord Shree Krishna said: I taught this eternal science of Yog to the Sun God, Vivasvan, who passed it on to Manu; and Manu, in turn, instructed it to Ikshvaku.";
 
     int message_size = sizeof(message)/sizeof(message[0]) - 1;
@@ -306,23 +286,23 @@ complex double *Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
         Slice_Repeater(virtual_subcarrier, Data_Frames[i], 0, 0, 6, 1); // Filled = 6
 
         Slice_Repeater(Data_Payload_Mod[i], Data_Frames[i], 6, 0, 5, 1);    // Filled = 11
-        Data_Payload_Mod[i][11] = pilot[0];                                 // Filled = 12
+        Data_Frames[i][11] = pilot[0];                                 // Filled = 12
 
         Slice_Repeater(Data_Payload_Mod[i], Data_Frames[i], 12, 5, 18, 1);  // Filled = 25
-        Data_Payload_Mod[i][25] = pilot[1];                                 // Filled = 26
+        Data_Frames[i][25] = pilot[1];                                 // Filled = 26
 
         Slice_Repeater(Data_Payload_Mod[i], Data_Frames[i], 26, 18, 24, 1); // Filled = 32
         
-        Data_Payload_Mod[i][32] = 0;                                        // Filled = 33
+        Data_Frames[i][32] = 0;                                        // Filled = 33
 
         Slice_Repeater(Data_Payload_Mod[i], Data_Frames[i], 33, 24, 30, 1); // Filled  = 39
-        Data_Payload_Mod[i][39] = pilot[2];                                 // FIlled = 40
+        Data_Frames[i][39] = pilot[2];                                 // FIlled = 40
 
         Slice_Repeater(Data_Payload_Mod[i], Data_Frames[i], 40, 30, 43, 1); // Filled  = 53
-        Data_Payload_Mod[i][53] = pilot[3];                                 // Filled  = 54
+        Data_Frames[i][53] = pilot[3];                                 // Filled  = 54
 
         Slice_Repeater(Data_Payload_Mod[i], Data_Frames[i], 54, 43, 48, 1); // Filled  = 59
-        Slice_Repeater(virtual_subcarrier, Data_Frames[i], 59, 6, 11, 1); // Filled = 64     
+        Slice_Repeater(virtual_subcarrier, Data_Frames[i], 59, 6, 11, 1); // Filled = 64    
     }
 
     complex double **Data_Frames_IFFT = Allocate_Array_2D(data_frames_number, 64);
@@ -379,6 +359,8 @@ complex double *Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
     complex double *Tx_signal = Allocate_Array_1D(len_out_sig);
 
     Convolution(Tx_signal,RRC_Filter_Tx,inp_signal_padded, len_out_sig, len_RRC_Coeff);
+
+    Display(Tx_signal, len_out_sig);
 
     int len_out_signal_repeated = 10 * len_out_sig;
     complex double *Tx_signal_repeated = Allocate_Array_1D(len_out_signal_repeated);
@@ -523,8 +505,6 @@ void Receiver(complex double* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
     int len_Rx_Signal = len_Tx_Signal * 0.307; // Number of packets Captured
 
-    printf("\n%d", len_Rx_Signal);    
-
     int rx_start = rand() % (len_Tx_Signal - len_Rx_Signal);
 
     complex double* Rx_Signal = Allocate_Array_1D(len_Rx_Signal);
@@ -580,23 +560,17 @@ int main()
 
     complex double* TX_signal = Transmitter();
 
-    printf("%d", len_Tx_Signal);
+    // Display(TX_signal, len_Tx_Signal);
 
-    int num_snr = 20;
+    double SNR[5] = {100, 101, 102, 103, 104};
 
-    double SNR[num_snr];
+    printf("\n\nCode Run Successful!");
 
-    for(int i = 0; i < num_snr; ++i)
-    {
-        SNR[i] = i;
-    }
-
-    for(int i = 0; i < 2; ++i)
+    for(int i = 0; i < 1; ++i)
     {
         complex double* Tx_OTA_signal = Transmission_Over_Air(TX_signal, SNR[i], len_Tx_Signal);
 
         Receiver(Tx_OTA_signal, len_Tx_Signal, data_frames_number);
     }
-
     return 0;    
 }
