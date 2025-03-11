@@ -10,49 +10,44 @@
 
 #define PI 3.14159265358979323846
 
-int len_Tx_Signal = 0, data_frames_number = 0, Data_Frame_Size = 0; // Used for Up Sampling and Down Sampling
+int len_Tx_Signal_repeated = 0, data_frames_number = 0, Data_Frame_Size = 0; // Used for Up Sampling and Down Sampling
 
 // data_frames_number = number of payloads
 
 complex double *Data = NULL; // This is where all the binary data is stored
 
-double RRC_Filter_Tx[21] = {-0.000454720514876223, 0.00353689555574986, -0.00714560809091226, 0.00757906190517828, 0.00214368242727367, -0.0106106866672496, 0.0300115539818315, -0.0530534333362480, -0.0750288849545787, 0.409168714634052, 0.803738600397980, 0.409168714634052, -0.0750288849545787, -0.0530534333362480, 0.0300115539818315, -0.0106106866672496, 0.00214368242727367, 0.00757906190517828, -0.00714560809091226, 0.00353689555574986, -0.000454720514876223};
+complex double RRC_Filter_Tx[21] = {-0.000454720514876223, 0.00353689555574986, -0.00714560809091226, 0.00757906190517828, 0.00214368242727367, -0.0106106866672496, 0.0300115539818315, -0.0530534333362480, -0.0750288849545787, 0.409168714634052, 0.803738600397980, 0.409168714634052, -0.0750288849545787, -0.0530534333362480, 0.0300115539818315, -0.0106106866672496, 0.00214368242727367, 0.00757906190517828, -0.00714560809091226, 0.00353689555574986, -0.000454720514876223};
 
 int len_RRC_Coeff = 21;
 int len_RRC_rx = 10;
 
-// Cyclically Shifts frequency domain array before discrete ifft
-void ifft_shift(complex double *X) 
+complex double* Allocate_Array_1D(int size) 
 {
-    int mid = N_FFT / 2;
-
-    for(int i = 0; i < mid; ++i)
-    {
-        complex double temp = X[i];
-        X[i] = X[i + mid];
-        X[i + mid] = temp;
+    complex double *array = (complex double *)calloc(size, sizeof(complex double));
+    if (array == NULL) {
+        printf("Memory allocation failed for 1D array!\n");
+        exit(1);
     }
+    return array;
 }
 
+// Function to allocate a 2D array of complex double
+complex double** Allocate_Array_2D(int data_frames_number, int cols) {
+    complex double **array = (complex double **)malloc(data_frames_number * sizeof(complex double *));
+    if (array == NULL) {
+        printf("Memory allocation failed for 2D array (row pointers)!\n");
+        exit(1);
+    }
 
-// Discete Inverse Fourier Transform : O(N^2)
-void ifft(complex double *X, complex double *Y) // X = Frequency Domain, Y = Time Domain
-{
-    ifft_shift(X);
-
-    complex double W;
-    for(int i = 0; i < N_FFT; ++i)
-    {
-        Y[i] = 0;
-        for(int j = 0; j < N_FFT; ++j)
-        {
-            W = cexp((I * 2.0 * PI * i * j) / N_FFT);
-            Y[i] += X[j] * W;
+    for (int i = 0; i < data_frames_number; i++) {
+        array[i] = (complex double *)calloc(cols, sizeof(complex double));
+        if (array[i] == NULL) {
+            printf("Memory allocation failed for 2D array (row %d)!\n", i);
+            exit(1);
         }
-        Y[i] /= N_FFT;
     }
+    return array;
 }
-
 
 void Slice_Repeater(complex double *X, complex double *Y, int starti, int lo, int hi, int r) // ind is starting index of Y i.e Output, lo and hi are the starting and ending indices of X(input), r is the number of times we are repeating
 {
@@ -68,16 +63,107 @@ void Slice_Repeater(complex double *X, complex double *Y, int starti, int lo, in
     }
 }
 
-void Convolution (complex double *Out, double *impulse, complex double *In, int lenOut, int lenImp)
+// Cyclically Shifts frequency domain array before discrete ifft
+void ifft_shift(complex double *X, int sz) 
 {
-    for(int i = 0; i < lenOut; ++i)
+    int mid = sz / 2;
+
+    for(int i = 0; i < mid; ++i)
     {
-        for(int j = 0; j < lenImp; ++j)
-        {
-            Out[i] += impulse[j] * In[i + j - 1];
-        }
+        complex double temp = X[i];
+        X[i] = X[i + mid];
+        X[i + mid] = temp;
     }
 }
+
+// Cyclically Shifts frequency domain array before discrete fft
+
+void fft_shift(complex double *X, int sz)
+{
+    int mid = (sz + 1) / 2;
+
+    for (int i = 0; i < sz / 2; ++i)
+    {
+        complex double temp = X[i];
+        X[i] = X[i + mid];
+        X[i + mid] = temp;
+    }
+}
+
+// Discete Inverse Fourier Transform : O(N^2)
+void ifft(complex double *X, complex double *Y, int sz) // X = Frequency Domain, Y = Time Domain
+{
+    ifft_shift(X, sz); 
+
+    complex double W;
+
+    for (int i = 0; i < sz; ++i)
+    {
+        Y[i] = 0;
+        for (int j = 0; j < sz; ++j)
+        {
+            W = cexp((I * 2.0 * PI * i * j) / sz); 
+            Y[i] += X[j] * W;
+        }
+        Y[i] /= sz; 
+    }
+}
+
+void fft(complex double *X, complex double *Y, int sz) // X = Time Domain, Y = Frequency Domain
+{
+    complex double W;
+
+    for (int i = 0; i < sz; ++i)
+    {
+        Y[i] = 0;
+        for (int j = 0; j < sz; ++j)
+        {
+            W = cexp((-I * 2.0 * PI * j * i) / sz);
+            Y[i] += X[j] * W;
+        }
+    }
+
+    fft_shift(Y, sz); 
+}
+
+
+complex double* Convolution (complex double *Inp, complex double *H, int len_Inp, int len_H)
+{
+    int len_Out = len_Inp + len_H - 1;
+
+    complex double *Inp_Padded = Allocate_Array_1D(len_Out);
+    Slice_Repeater(Inp, Inp_Padded, 0, 0, len_Inp, 1);
+    for (int i = len_Inp; i < len_Out; i++) Inp_Padded[i] = 0;
+
+    complex double *H_Padded = Allocate_Array_1D(len_Out);
+    Slice_Repeater(H, H_Padded, 0, 0, len_H, 1);
+    for (int i = len_H; i < len_Out; i++) H_Padded[i] = 0;
+
+    complex double *Inp_freq = Allocate_Array_1D(len_Out);
+    complex double *H_freq = Allocate_Array_1D(len_Out);
+    complex double *Out_freq = Allocate_Array_1D(len_Out);
+
+    fft(Inp_Padded, Inp_freq, len_Out);
+    fft(H_Padded, H_freq, len_Out);
+
+    for (int i = 0; i < len_Out; i++) 
+    {
+        Out_freq[i] = Inp_freq[i] * H_freq[i];
+    }
+
+    complex double *Out = Allocate_Array_1D(len_Out);
+
+    ifft(Out_freq, Out, len_Out);
+    
+    free(Inp_Padded);
+    free(H_Padded);
+    free(Inp_freq);
+    free(H_freq);
+    free(Out_freq);
+
+    return Out;
+}
+
 
 void Display(complex double *X, int sz)
 {
@@ -108,7 +194,7 @@ void Preamble_Generator(double scale, double complex *P_k, double complex *virtu
     // printf("Preamble (Frequency Domain):\n");
     // Display(preamble_freq, N_FFT);
 
-    ifft(preamble_freq, preamble_time);
+    ifft(preamble_freq, preamble_time, N_FFT);
 
     // printf("Preamble Shift (Time Domain):\n");
     // Display(preamble_time, N_FFT);
@@ -122,33 +208,6 @@ void Preamble_Generator(double scale, double complex *P_k, double complex *virtu
     }
 
     //Display(Preamble, 160); 
-}
-
-complex double* Allocate_Array_1D(int size) {
-    complex double *array = (complex double *)calloc(size, sizeof(complex double));
-    if (array == NULL) {
-        printf("Memory allocation failed for 1D array!\n");
-        exit(1);
-    }
-    return array;
-}
-
-// Function to allocate a 2D array of complex double
-complex double** Allocate_Array_2D(int data_frames_number, int cols) {
-    complex double **array = (complex double **)malloc(data_frames_number * sizeof(complex double *));
-    if (array == NULL) {
-        printf("Memory allocation failed for 2D array (row pointers)!\n");
-        exit(1);
-    }
-
-    for (int i = 0; i < data_frames_number; i++) {
-        array[i] = (complex double *)calloc(cols, sizeof(complex double));
-        if (array[i] == NULL) {
-            printf("Memory allocation failed for 2D array (row %d)!\n", i);
-            exit(1);
-        }
-    }
-    return array;
 }
 
 void Decimal_To_Binary(int msg, int* msg_bits) 
@@ -309,7 +368,7 @@ complex double *Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
 
     for(int i = 0; i < data_frames_number; ++i)
     {
-        ifft(Data_Frames[i], Data_Frames_IFFT[i]);
+        ifft(Data_Frames[i], Data_Frames_IFFT[i], 64);
     }
 
     complex double **Data_Frames_Time_TX = Allocate_Array_2D(data_frames_number, 80);
@@ -346,30 +405,22 @@ complex double *Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
         Data_Frame_TX_Oversamp[2*i + 1] = 0;
     }  
     
-    // Convoulation of the Tx Frame with RRC Filter
+    // Convolution of the Tx Frame with RRC Filter
 
-    int len_inp_sig = 2*Data_Frame_Size;
+    int len_inp_sig = oversampling_rate_tx * Data_Frame_Size;
   
     int len_out_sig = len_inp_sig + len_RRC_Coeff - 1; 
 
-    complex double *inp_signal_padded = Allocate_Array_1D(len_inp_sig + 2 * (len_RRC_Coeff - 1));
+    //Display(Data_Frame_TX_Oversamp, len_inp_sig);
 
-    Slice_Repeater(Data_Frame_TX_Oversamp, inp_signal_padded, len_RRC_Coeff - 1, 0, len_inp_sig, 1);
+    complex double *Tx_signal = Convolution(Data_Frame_TX_Oversamp, RRC_Filter_Tx, len_inp_sig, len_RRC_Coeff);
 
-    complex double *Tx_signal = Allocate_Array_1D(len_out_sig);
-
-    Convolution(Tx_signal,RRC_Filter_Tx,inp_signal_padded, len_out_sig, len_RRC_Coeff);
-
-    Display(Tx_signal, len_out_sig);
-
-    int len_out_signal_repeated = 10 * len_out_sig;
-    complex double *Tx_signal_repeated = Allocate_Array_1D(len_out_signal_repeated);
+    len_Tx_Signal_repeated = 10 * len_out_sig;
+    complex double *Tx_signal_repeated = Allocate_Array_1D(len_Tx_Signal_repeated);
 
     Slice_Repeater(Tx_signal, Tx_signal_repeated, 0, 0, len_out_sig, 10);
 
-    len_Tx_Signal = len_out_signal_repeated;
-
-    return Tx_signal;
+    return Tx_signal_repeated;
 }
 
 double gaussian_noise(double mean, double variance) {
@@ -517,15 +568,8 @@ void Receiver(complex double* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
   
     int len_out_sig = len_inp_sig + len_RRC_Coeff - 1; 
 
-    complex double *inp_signal_padded = Allocate_Array_1D(len_inp_sig + 2 * (len_RRC_Coeff - 1));
-
-    Slice_Repeater(Rx_Signal, inp_signal_padded, len_RRC_Coeff - 1, 0, len_inp_sig, 1);
-
-    complex double *Rx_filter_signal = Allocate_Array_1D(len_out_sig);
-
-    // Convoulation
-
-    Convolution(Rx_filter_signal,RRC_Filter_Tx,inp_signal_padded, len_out_sig, len_RRC_Coeff);
+    // Convolution
+    complex double *Rx_filter_signal = Convolution(Tx_OTA_signal, RRC_Filter_Tx, len_inp_sig, len_RRC_Coeff);
 
     // Packet Detection
 
@@ -558,9 +602,9 @@ int main()
 {
     srand(time(NULL));
 
-    complex double* TX_signal = Transmitter();
+    complex double* TX_signal_repeated = Transmitter();
 
-    // Display(TX_signal, len_Tx_Signal);
+    Display(TX_signal_repeated, len_Tx_Signal_repeated);
 
     double SNR[5] = {100, 101, 102, 103, 104};
 
@@ -568,9 +612,9 @@ int main()
 
     for(int i = 0; i < 1; ++i)
     {
-        complex double* Tx_OTA_signal = Transmission_Over_Air(TX_signal, SNR[i], len_Tx_Signal);
+        complex double* Tx_OTA_signal = Transmission_Over_Air(TX_signal_repeated, SNR[i], len_Tx_Signal_repeated);
 
-        Receiver(Tx_OTA_signal, len_Tx_Signal, data_frames_number);
+        Receiver(Tx_OTA_signal, len_Tx_Signal_repeated, data_frames_number);
     }
     return 0;    
 }
