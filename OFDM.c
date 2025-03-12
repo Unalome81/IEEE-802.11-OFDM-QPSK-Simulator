@@ -21,6 +21,15 @@ complex double RRC_Filter_Tx[21] = {-0.000454720514876223, 0.00353689555574986, 
 int len_RRC_Coeff = 21;
 int len_RRC_rx = 10;
 
+void Display(complex double *X, int sz)
+{
+    for (int i = 0; i < sz; i++) 
+    {
+        printf("%d  " "%lf + %lf*I \n",i+1, creal(X[i]), cimag(X[i]));
+    }
+    printf("\n");
+}
+
 void write_complex_array_to_file(double complex* A, int len_A) {
     FILE* file = fopen("Code_Output.txt", "w");  // Fixed filename
     if (file == NULL) {
@@ -212,15 +221,6 @@ complex double* Convolution (complex double *Inp, complex double *H, int len_Inp
 // }
 
 
-void Display(complex double *X, int sz)
-{
-    for (int i = 0; i < sz; i++) 
-    {
-        printf("%d  " "%lf + %lf*I \n",i+1, creal(X[i]), cimag(X[i]));
-    }
-    printf("\n");
-}
-
 void Preamble_Generator(double scale, double complex *P_k, double complex *virtual_subcarrier, double complex *Preamble, int type)
 {
     //complex double Preamble[160];
@@ -362,7 +362,6 @@ complex double *Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
     int n_bits = 96; // Number of bits in one frame
 
     
-
     // Creating Data Payloads
 
     complex double **Data_Payload = Allocate_Array_2D(data_frames_number, 96);
@@ -507,7 +506,6 @@ complex double* Transmission_Over_Air(complex double* TX_signal, double snr, int
 
 complex double* Packet_Detection(complex double *Rx_Signal, int len_RX_Signal, int* len_Corr_Out)
 {
-
     int delay_param= 16;
     int window_length = 32;
     int lenCorr_arr = len_RX_Signal - delay_param + 1 - window_length;
@@ -619,11 +617,11 @@ void Receiver(complex double* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
     int len_Rx_Signal = len_Tx_Signal * 0.307; // Number of packets Captured
 
-    len_Rx_Signal = 3000;  // To be removed
+    // len_Rx_Signal = 3000;  // To be removed
 
     int rx_start = rand() % (len_Tx_Signal - len_Rx_Signal);
 
-    rx_start = 0; // To be removed
+    // rx_start = 0; // To be removed
 
     complex double* Rx_Signal = Allocate_Array_1D(len_Rx_Signal);
 
@@ -635,15 +633,11 @@ void Receiver(complex double* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
   
     int len_out_sig = len_inp_sig + len_RRC_Coeff - 1; 
 
-    //Display(Rx_Signal, len_inp_sig);
 
     // Convolution
     complex double *Rx_filter_signal = Convolution(Rx_Signal, RRC_Filter_Tx, len_inp_sig, len_RRC_Coeff);
-    //printf("%d %d", len_inp_sig, len_RRC_Coeff);
 
     printf("%d  " "%lf + %lf*I \n",0, creal(Rx_filter_signal[1640]), cimag(Rx_filter_signal[1640]));
-
-    //Display(Rx_filter_signal, len_out_sig);
 
     // Packet Detection
 
@@ -673,7 +667,7 @@ void Receiver(complex double* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
     write_complex_array_to_file(rx_frame, rx_frame_size);
     
-    // Display(rx_frame, rx_frame_size);    
+    Display(rx_frame, rx_frame_size);    
 }
 
 
@@ -683,17 +677,13 @@ int main()
 
     complex double* TX_signal_repeated = Transmitter();
 
-    // write_complex_array_to_file(TX_signal_repeated, len_Tx_Signal_repeated);
-
     double SNR[5] = {100, 100, 100, 100, 100};
 
     for(int i = 0; i < 1; ++i)
     {
         complex double* Tx_OTA_signal = Transmission_Over_Air(TX_signal_repeated, SNR[i], len_Tx_Signal_repeated);
 
-        // Display(Tx_OTA_signal, len_Tx_Signal_repeated);
-
-        Receiver(TX_signal_repeated, len_Tx_Signal_repeated, data_frames_number);
+        Receiver(Tx_OTA_signal, len_Tx_Signal_repeated, data_frames_number);
     }
 
     printf("\n\nCode Run Successful!");
