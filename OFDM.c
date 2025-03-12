@@ -21,6 +21,25 @@ complex double RRC_Filter_Tx[21] = {-0.000454720514876223, 0.00353689555574986, 
 int len_RRC_Coeff = 21;
 int len_RRC_rx = 10;
 
+void write_complex_array_to_file(double complex* A, int len_A) {
+    FILE* file = fopen("Code_Output.txt", "w");  // Fixed filename
+    if (file == NULL) {
+        perror("Error opening file");
+        return;
+    }
+
+    for (int i = 0; i < len_A; i++) {
+         fprintf(file, "%.15e + %.15ei", creal(A[i]), cimag(A[i]));
+         //fprintf(file, "%.15e", creal(A[i]));
+        if (i < len_A - 1) {
+            fprintf(file, "\t");  // Tab separator
+        }
+    }
+    fprintf(file, "\n");
+
+    fclose(file);
+}
+
 complex double* Allocate_Array_1D(int size) 
 {
     complex double *array = (complex double *)calloc(size, sizeof(complex double));
@@ -64,29 +83,41 @@ void Slice_Repeater(complex double *X, complex double *Y, int starti, int lo, in
 }
 
 // Cyclically Shifts frequency domain array before discrete ifft
-void ifft_shift(complex double *X, int sz) 
-{
-    int mid = sz / 2;
+void ifft_shift(complex double *X, int sz) {
+    int mid = sz / 2; 
 
-    for(int i = 0; i < mid; ++i)
+    complex double temp[sz]; 
+
+    for (int i = 0; i < sz; i++) 
     {
-        complex double temp = X[i];
-        X[i] = X[i + mid];
-        X[i + mid] = temp;
+        temp[i] = X[i];
+    }
+    int shifted_index = 0;
+    for (int i = 0; i < sz; i++) 
+    {
+        shifted_index = (i + mid) % sz;
+        X[i] = temp[shifted_index];
     }
 }
 
 // Cyclically Shifts frequency domain array before discrete fft
 
-void fft_shift(complex double *X, int sz)
+void fft_shift(complex double *X, int sz) 
 {
-    int mid = (sz + 1) / 2;
+    int mid = sz / 2; 
 
-    for (int i = 0; i < sz / 2; ++i)
+    complex double temp[sz]; 
+
+    for (int i = 0; i < sz; i++) 
     {
-        complex double temp = X[i];
-        X[i] = X[i + mid];
-        X[i + mid] = temp;
+        temp[i] = X[i];
+    }
+    int shifted_index = 0;
+    for (int i = 0; i < sz; i++) 
+    {
+        
+        shifted_index = (i + mid) % sz;
+        X[shifted_index] = temp[i];
     }
 }
 
@@ -133,11 +164,11 @@ complex double* Convolution (complex double *Inp, complex double *H, int len_Inp
 
     complex double *Inp_Padded = Allocate_Array_1D(len_Out);
     Slice_Repeater(Inp, Inp_Padded, 0, 0, len_Inp, 1);
-    for (int i = len_Inp; i < len_Out; i++) Inp_Padded[i] = 0;
+    //for (int i = len_Inp; i < len_Out; i++) Inp_Padded[i] = 0;
 
     complex double *H_Padded = Allocate_Array_1D(len_Out);
     Slice_Repeater(H, H_Padded, 0, 0, len_H, 1);
-    for (int i = len_H; i < len_Out; i++) H_Padded[i] = 0;
+    //for (int i = len_H; i < len_Out; i++) H_Padded[i] = 0;
 
     complex double *Inp_freq = Allocate_Array_1D(len_Out);
     complex double *H_freq = Allocate_Array_1D(len_Out);
@@ -163,6 +194,22 @@ complex double* Convolution (complex double *Inp, complex double *H, int len_Inp
 
     return Out;
 }
+
+// complex double* Convolution(complex double *Inp, complex double *H, int len_Inp, int len_H) {
+//     int len_Out = len_Inp + len_H - 1;
+
+//     complex double *Out = Allocate_Array_1D(len_Out);
+
+//     for (int n = 0; n < len_Out; n++) {
+//         for (int k = 0; k < len_H; k++) {
+//             if (n - k >= 0 && n - k < len_Inp) {
+//                 Out[n] += Inp[n - k] * H[k];
+//             }
+//         }
+//     }
+
+//     return Out;
+// }
 
 
 void Display(complex double *X, int sz)
@@ -579,7 +626,6 @@ void Receiver(complex double* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
     rx_start = 0; // To be removed
 
     complex double* Rx_Signal = Allocate_Array_1D(len_Rx_Signal);
-    
 
     Slice_Repeater(Tx_OTA_signal, Rx_Signal, 0, rx_start, rx_start + len_Rx_Signal, 1);
 
@@ -589,12 +635,13 @@ void Receiver(complex double* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
   
     int len_out_sig = len_inp_sig + len_RRC_Coeff - 1; 
 
-    Display(Rx_Signal, len_inp_sig);
+    //Display(Rx_Signal, len_inp_sig);
 
     // Convolution
-    complex double *Rx_filter_signal = Convolution(Tx_OTA_signal, RRC_Filter_Tx, len_inp_sig, len_RRC_Coeff);
+    complex double *Rx_filter_signal = Convolution(Rx_Signal, RRC_Filter_Tx, len_inp_sig, len_RRC_Coeff);
+    //printf("%d %d", len_inp_sig, len_RRC_Coeff);
 
-    //printf("%d  " "%lf + %lf*I \n",0, creal(Rx_filter_signal[1640]), cimag(Rx_filter_signal[1640]));
+    printf("%d  " "%lf + %lf*I \n",0, creal(Rx_filter_signal[1640]), cimag(Rx_filter_signal[1640]));
 
     //Display(Rx_filter_signal, len_out_sig);
 
@@ -623,6 +670,8 @@ void Receiver(complex double* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
         rx_frame[index] = Rx_filter_signal[i];
         index += 1;
     }
+
+    write_complex_array_to_file(rx_frame, rx_frame_size);
     
     // Display(rx_frame, rx_frame_size);    
 }
@@ -634,13 +683,15 @@ int main()
 
     complex double* TX_signal_repeated = Transmitter();
 
+    // write_complex_array_to_file(TX_signal_repeated, len_Tx_Signal_repeated);
+
     double SNR[5] = {100, 100, 100, 100, 100};
 
     for(int i = 0; i < 1; ++i)
     {
         complex double* Tx_OTA_signal = Transmission_Over_Air(TX_signal_repeated, SNR[i], len_Tx_Signal_repeated);
 
-        //Display(Tx_OTA_signal, len_Tx_Signal_repeated);
+        // Display(Tx_OTA_signal, len_Tx_Signal_repeated);
 
         Receiver(TX_signal_repeated, len_Tx_Signal_repeated, data_frames_number);
     }
