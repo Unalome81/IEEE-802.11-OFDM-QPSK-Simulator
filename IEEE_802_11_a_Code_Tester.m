@@ -290,7 +290,7 @@ Long_preamble_2_After_FFT = fftshift(fft(Long_preamble_2)); % [1x64]
 % Estimate the channel by averaging the FFT of both Long preamble sections and taking the conjugate of the Long preamble
 H_est = 0.5*(Long_preamble_1_After_FFT+Long_preamble_2_After_FFT).*conj(Long_preamble_slot_Frequency); % [1x64]
 
-% Perform IFFT to get the channel estimate in the time domain
+% Perform IFFT to get the   channel estimate in the time domain
 H_est_time = ifft(ifftshift(H_est)); % [1x64]
 
 %% One tap Equalizer
