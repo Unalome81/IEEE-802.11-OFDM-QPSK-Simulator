@@ -492,7 +492,7 @@ complex double* Transmission_Over_Air(complex double* TX_signal, double snr, int
     }
     Tx_signal_power /= len_Tx_Signal; 
 
-    double snr_linear = pow(10, Tx_signal_power / 10);
+    double snr_linear = pow(10, snr / 10);
 
     double noise_power = Tx_signal_power / snr_linear;
 
