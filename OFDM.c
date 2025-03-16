@@ -15,6 +15,10 @@
 #define fc_hz 5e9  // Carrier frequency (5 GHz)
 #define fs_hz 20e6  // Sampling frequency (20 MHz)
 #define ts_sec (1/fs_hz)  // Time period (50 ns)
+#define num_snr 5
+
+unsigned char message[] = "The Supreme Lord Shree Krishna said: I taught this eternal science of Yog to the Sun God, Vivasvan, who passed it on to Manu; and Manu, in turn, instructed it to Ikshvaku.";
+//"The Supreme Lord Shree Krishna said: I taught this eternal science of Yog to the Sun God, Vivasvan, who passed it on to Manu; and Manu, in turn, instructed it to Ikshvaku.";
 
 
 int len_Tx_Signal_repeated = 0, data_frames_number = 0, Data_Frame_Size = 0; // data_frames_number = number of payloads
@@ -22,6 +26,8 @@ int len_Tx_Signal_repeated = 0, data_frames_number = 0, Data_Frame_Size = 0; // 
 int len_RRC_Coeff = 21, len_RRC_rx = 10;
 
 double complex *Data = NULL; // This is where all the binary data is stored
+
+double complex **Data_Payload_Mod = NULL;
 
 double complex RRC_Filter_Tx[21] = {-0.000454720514876223, 0.00353689555574986, -0.00714560809091226, 0.00757906190517828, 0.00214368242727367, -0.0106106866672496, 0.0300115539818315, -0.0530534333362480, -0.0750288849545787, 0.409168714634052, 0.803738600397980, 0.409168714634052, -0.0750288849545787, -0.0530534333362480, 0.0300115539818315, -0.0106106866672496, 0.00214368242727367, 0.00757906190517828, -0.00714560809091226, 0.00353689555574986, -0.000454720514876223};
 
@@ -33,7 +39,16 @@ void Display(double complex *X, int sz)
 {
     for (int i = 0; i < sz; i++) 
     {
-        printf("%d  " "%lf + %lf*I \n",i+1, creal(X[i]), cimag(X[i]));
+        printf("%d  %lf + %lf*I \n",i+1, creal(X[i]), cimag(X[i]));
+    }
+    printf("\n");
+}
+
+void Display_Double(double* X, int sz)
+{
+    for (int i = 0; i < sz; i++) 
+    {
+        printf("%d  %lf \n" , i+1, X[i]);
     }
     printf("\n");
 }
@@ -48,9 +63,9 @@ void write_complex_array_to_file(double complex* A, int len_A) {
     for (int i = 0; i < len_A; i++) {
         if (!isinf(creal(A[i])) && !isinf(cimag(A[i])))
         {
-            fprintf(file, "%.15e + %.15ei", creal(A[i]), cimag(A[i]));
+            //fprintf(file, "%.15e + %.15ei", creal(A[i]), cimag(A[i]));
 
-            //fprintf(file, "%.15e", creal(A[i]));
+            fprintf(file, "%.15e", creal(A[i]));
             if (i < len_A - 1) 
             {
                 fprintf(file, "\t");  // Tab separator
@@ -295,31 +310,27 @@ void QPSK_Modulator(double complex **Data_Payload, double complex **Data_Payload
 
 void Data_Generator()
 {
-    unsigned char message[] = "AAAAAAAAAAAAAAAAAAAAAAAA";
-    //"The Supreme Lord Shree Krishna said: I taught this eternal science of Yog to the Sun God, Vivasvan, who passed it on to Manu; and Manu, in turn, instructed it to Ikshvaku.";
-
     int message_size = sizeof(message)/sizeof(message[0]) - 1;
 
     data_frames_number = ceil(8 * message_size / 96.0); 
 
     int total_bits = data_frames_number * 96;
 
-    Data = Allocate_Array_1D(total_bits);
+    int total_chars = total_bits / 8;
 
-    if (Data == NULL) 
-    {
-        printf("Memory allocation failed!\n");
-        return;
-    }
+    Data = Allocate_Array_1D(total_bits);
 
     // Encoder 
     int msg_bits[8] = {0};
 
     int index = 0;
 
-    for(int i = 0; i < message_size; ++i) //convert each character to 8bit binary and store in data array
+    for(int i = 0; i < total_chars; ++i) //convert each character to 8bit binary and store in data array
     {
-        Decimal_To_Binary(message[i], msg_bits);
+        if(i < message_size)
+            Decimal_To_Binary(message[i], msg_bits);
+        else 
+            Decimal_To_Binary(' ', msg_bits);
 
         for(int j = 0; j < 8; ++j)
         {
@@ -329,7 +340,7 @@ void Data_Generator()
     }    
 }
 
-double complex *Transmitter() // Functions Used: Data_Generator(), Preamble_Generator(), IFFT(), QPSK_Modulator(), Slice_Repeater(), Convoulation()
+double complex* Transmitter() // Functions Used: Data_Generator(), Preamble_Generator(), IFFT(), QPSK_Modulator(), Slice_Repeater(), Convoulation()
 {
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Data Generation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
@@ -377,7 +388,7 @@ double complex *Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
 
    //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% QPSK Modulation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
-    double complex **Data_Payload_Mod = Allocate_Array_2D(data_frames_number, 48);
+    Data_Payload_Mod = Allocate_Array_2D(data_frames_number, 48);
 
     QPSK_Modulator(Data_Payload, Data_Payload_Mod, data_frames_number);
 
@@ -694,17 +705,106 @@ void Channel_Estimation(double complex* rx_frame_after_fine, double complex* H_e
     }
 }
 
-void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_number)
+void AGC_Receiver(double complex** Rx_Payload_No_Pilot, double complex** Rx_Payload_Final)
+{
+    for(int i = 0; i < data_frames_number; ++i)
+    {
+       for(int j = 0; j < 48; ++j)
+       {
+           double complex z = Rx_Payload_No_Pilot[i][j];
+
+           if(creal(z) > 0)
+               Rx_Payload_Final[i][j] = 1.0/sqrt(2.0);
+           else 
+               Rx_Payload_Final[i][j] = -1.0/sqrt(2.0);
+
+           if(cimag(z) > 0)
+               Rx_Payload_Final[i][j] += I*1.0/sqrt(2.0);
+           else 
+               Rx_Payload_Final[i][j] += I*-1.0/sqrt(2.0);
+       }
+    }
+}
+
+void QPSK_Demodulator(double complex **Data_Payload, double complex **Data_Payload_Demod, int data_frames_number)
+{
+    for(int i = 0; i < data_frames_number; ++i)
+    {
+        for(int j = 0; j < 48; j++)
+        {
+            double a = creal(Data_Payload[i][j]), b = cimag(Data_Payload[i][j]);
+
+            int c = 0, d = 0;
+
+            if(a > 0 && b > 0)
+            {
+                c = 0;
+                d = 0;
+            }
+            else if(a < 0 && b > 0)
+            {
+                c = 0;
+                d = 1;
+            }
+            else if(a < 0 && b < 0)
+            {
+                c = 1;
+                d = 0;
+            }
+            else 
+            {
+                c = 1;
+                d = 1;
+            }
+            
+            Data_Payload_Demod[i][2 * j] = c;
+            Data_Payload_Demod[i][2 * j + 1] = d;
+        }
+    }
+}
+
+int Binary_To_Decimal(int* msg_bits) 
+{
+    int res = 0;
+
+    for(int i = 0; i < 8; ++i)
+    {
+        res = (res * 2) + msg_bits[i];
+    }    
+    return res;
+}
+
+void Message_Generator(double complex* Data, char* msg_RX, int total_bits)
+{
+    int index = 0;
+
+    int msg_bits[8];
+
+    int msg_index = 0;
+    for(int i = 0; i < total_bits; i += 8)
+    {
+        for(int j = 0; j < 8; ++j)
+        {
+            msg_bits[j] = Data[i + j];
+        }
+
+        // Decoder
+        
+        msg_RX[msg_index++] = Binary_To_Decimal(msg_bits);
+    }
+}
+
+void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_number, double* Res)
 {
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Capturing Packets %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
     int len_Rx_Signal = len_Tx_Signal * 0.307; // Number of packets Captured
 
-    len_Rx_Signal = 3000;  // To be removed
+    // len_Rx_Signal = 3000;  // To be removed
 
     int rx_start = rand() % (len_Tx_Signal - len_Rx_Signal);
 
-    rx_start = 0; // To be removed
+    // rx_start = 0; // To be removed
 
     double complex* Rx_Signal = Allocate_Array_1D(len_Rx_Signal);
 
@@ -794,6 +894,125 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% De Mapping %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
+    double complex** Rx_Payload_No_Pilot = Allocate_Array_2D(data_frames_number, 48);
+
+    for(int i = 0; i < data_frames_number; ++i)
+    {
+        Slice_Repeater(Rx_Payload_Frequency_Equalizer[i], Rx_Payload_No_Pilot[i], 0, 6, 11, 1);
+        Slice_Repeater(Rx_Payload_Frequency_Equalizer[i], Rx_Payload_No_Pilot[i], 5, 12, 25, 1);
+        Slice_Repeater(Rx_Payload_Frequency_Equalizer[i], Rx_Payload_No_Pilot[i], 18, 26, 32, 1);
+        Slice_Repeater(Rx_Payload_Frequency_Equalizer[i], Rx_Payload_No_Pilot[i], 24, 33, 39, 1);
+        Slice_Repeater(Rx_Payload_Frequency_Equalizer[i], Rx_Payload_No_Pilot[i], 30, 40, 53, 1);
+        Slice_Repeater(Rx_Payload_Frequency_Equalizer[i], Rx_Payload_No_Pilot[i], 43, 54, 59, 1);
+    }
+
+     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% AGC for RX_Data_Payload %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
+
+    double complex** Rx_Payload_Final = Allocate_Array_2D(data_frames_number, 48);
+
+    AGC_Receiver(Rx_Payload_No_Pilot, Rx_Payload_Final);
+
+    //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% QPSK Demodulation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
+
+    double complex** Rx_Payload_Demod = Allocate_Array_2D(data_frames_number, 96);
+
+    QPSK_Demodulator(Rx_Payload_Final, Rx_Payload_Demod, data_frames_number);
+
+    write_complex_array_to_file(Rx_Payload_Demod[0], 96);
+
+
+    //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Combining all Data Frames %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
+
+    int total_bits = data_frames_number * 96;
+
+    double complex* Data_Rx = Allocate_Array_1D(total_bits);
+
+    index = 0;
+
+    for(int i = 0; i < data_frames_number; ++i)
+    {
+        for(int j = 0; j < 96; ++j)
+        {
+            Data_Rx[index] = Rx_Payload_Demod[i][j];
+            index++;
+        }
+    }
+
+    //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% EVM Calculation (Before AGC) %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
+
+    double complex error = 0;
+    
+    double error_square_sum = 0, data_payload_square_sum = 0;
+    
+    for(int i = 0; i < data_frames_number; ++i)
+    {
+        for(int j = 0; j < 48; ++j)
+        {
+            error = Rx_Payload_No_Pilot[i][j] - Data_Payload_Mod[i][j];
+            error_square_sum += pow(cabs(error), 2);
+            data_payload_square_sum += pow(cabs(Data_Payload_Mod[i][j]), 2);
+        }
+    }
+
+    double evm = 0, evm_dB = 0;
+
+    evm = sqrt(error_square_sum / (data_frames_number * 48)) / sqrt(data_payload_square_sum / (data_frames_number * 48));
+
+    evm_dB = 20 * log10(evm);   
+
+    //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% EVM Calculation (After AGC) %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
+
+    error = 0;
+    error_square_sum = 0;
+    data_payload_square_sum = 0;
+    
+    for(int i = 0; i < data_frames_number; ++i)
+    {
+        for(int j = 0; j < 48; ++j)
+        {
+            error = Rx_Payload_Final[i][j] - Data_Payload_Mod[i][j];
+            error_square_sum += pow(cabs(error), 2);
+            data_payload_square_sum += pow(cabs(Data_Payload_Mod[i][j]), 2);
+        }
+    }
+
+    double evm_AGC = 0, evm_AGC_dB = 0;
+
+    evm_AGC = sqrt(error_square_sum / (data_frames_number * 48)) / sqrt(data_payload_square_sum / (data_frames_number * 48));
+
+    evm_AGC_dB = 20 * log10(evm_AGC);   
+
+    //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% BER Calculation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
+
+    double sum = 0, ber = 0;
+
+    for(int i = 0; i < total_bits; ++i)
+    {
+        sum += abs(creal(Data[i]) - creal(Data_Rx[i]));
+    }
+
+    ber = sum / total_bits;
+    
+    Res[0] = evm_dB;
+    Res[1] = evm_AGC_dB;
+    Res[2] = ber;
+
+    //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Converting Bits to Message %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
+
+    int msg_Rx_size = total_bits / 8;
+
+    char msg_RX[msg_Rx_size];
+
+    Message_Generator(Data_Rx, msg_RX, total_bits);
+
+    printf("\n");
+    for(int i = 0; i < msg_Rx_size; ++i)
+    {
+        printf("%c", msg_RX[i]);
+    }
+    printf("\n");
+
+
 }
 
 int main() 
@@ -802,16 +1021,27 @@ int main()
 
     double complex* TX_signal_repeated = Transmitter();
 
-    double SNR[5] = {100, 100, 100, 100, 100};
+    double SNR[num_snr] = {10, 20, 30, 50, 100};
+
+    double EVM_AGC[num_snr], EVM_AGC_DB[num_snr], BER[num_snr];
 
     for(int i = 0; i < 1; ++i)
     {
+        printf("For SNR = %lf \n\n", SNR[i]);
+
         double complex* Tx_OTA_signal = Transmission_Over_Air(TX_signal_repeated, SNR[i], len_Tx_Signal_repeated);
 
         int rx_frame_size = 0;
         double complex* rx_frame = NULL;
+        
+        double Res[3]; // EVM_dB, EVM_AGC_DB, BER
+        Receiver(TX_signal_repeated, len_Tx_Signal_repeated, data_frames_number, Res);
 
-        Receiver(TX_signal_repeated, len_Tx_Signal_repeated, data_frames_number);
+        EVM_AGC[i] = Res[0];
+        EVM_AGC_DB[i] = Res[1];
+        BER[i] = Res[2];   
+        
+        Display_Double(Res, 3);
     }
 
     printf("\nCode Run Successful!");

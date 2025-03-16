@@ -48,11 +48,16 @@ def compare_complex_files(file1, file2, tolerance=1e-6):
     print(f"Max Error: {max_error:.6e}")
     print(f"Average Error: {avg_error:.6e}")
 
+    chk = 0
+
     # Print mismatched values if they exceed tolerance
     for i, ((r1, i1), (r2, i2)) in enumerate(zip(data1, data2)):
         error = complex_abs(r1 - r2, i1 - i2)
         if error > tolerance:
             print(f"Mismatch at index {i}: ({r1:.15e} + {i1:.15e}i) vs ({r2:.15e} + {i2:.15e}i) | Error: {error:.6e}")
+            chk = 1
 
+    if chk == 0:
+        print("\nNo Mismatch Found!")
 if __name__ == "__main__":
     compare_complex_files("Code_Output.txt", "Matlab_Output.txt", tolerance= 1e-6)
