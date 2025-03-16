@@ -15,9 +15,9 @@
 #define fc_hz 5e9  // Carrier frequency (5 GHz)
 #define fs_hz 20e6  // Sampling frequency (20 MHz)
 #define ts_sec (1/fs_hz)  // Time period (50 ns)
-#define num_snr 5
+#define num_snr 10
 
-unsigned char message[] = "The Supreme Lord Shree Krishna said: I taught this eternal science of Yog to the Sun God, Vivasvan, who passed it on to Manu; and Manu, in turn, instructed it to Ikshvaku.";
+unsigned char message[] = "Hello! I am Vivaswan Nawani. How are you?";
 //"The Supreme Lord Shree Krishna said: I taught this eternal science of Yog to the Sun God, Vivasvan, who passed it on to Manu; and Manu, in turn, instructed it to Ikshvaku.";
 
 
@@ -494,15 +494,14 @@ double gaussian_noise(double mean, double variance) {
 }
 
 
-double complex* Transmission_Over_Air(double complex* TX_signal, double snr, int len_Tx_Signal)
+void Transmission_Over_Air(double complex* TX_signal, complex double* TX_OTA_signal, double snr, int len_Tx_Signal)
 {
-    double complex* TX_OTA_signal = Allocate_Array_1D(len_Tx_Signal); 
-
     double Tx_signal_power = 0.0;
     for (int i = 0; i < len_Tx_Signal; i++) 
     {
         Tx_signal_power += (cabs(TX_signal[i])*cabs(TX_signal[i]));
     }
+
     Tx_signal_power /= len_Tx_Signal; 
 
     double snr_linear = pow(10, snr / 10);
@@ -511,10 +510,10 @@ double complex* Transmission_Over_Air(double complex* TX_signal, double snr, int
 
     for(int i = 0 ; i < len_Tx_Signal; ++i)
     {
-        TX_OTA_signal[i] += sqrt(noise_power) * (gaussian_noise(0, 1) + I*gaussian_noise(0, 1));
-    }
+        double noise = sqrt(noise_power) * (gaussian_noise(0, 1) + I*gaussian_noise(0, 1));
 
-    return TX_OTA_signal;
+        TX_OTA_signal[i] = TX_signal[i] + noise;
+    }
 }
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Receiver and it's Processing Blocks %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
@@ -1005,7 +1004,7 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
     Message_Generator(Data_Rx, msg_RX, total_bits);
 
-    printf("\n");
+    printf("\nReceived Message: \n");
     for(int i = 0; i < msg_Rx_size; ++i)
     {
         printf("%c", msg_RX[i]);
@@ -1021,27 +1020,31 @@ int main()
 
     double complex* TX_signal_repeated = Transmitter();
 
-    double SNR[num_snr] = {10, 20, 30, 50, 100};
+    double SNR[num_snr] = {6, 7, 8, 9, 10, 11, 12 ,13 , 14, 15};
 
     double EVM_AGC[num_snr], EVM_AGC_DB[num_snr], BER[num_snr];
 
-    for(int i = 0; i < 1; ++i)
+    for(int i = 0; i < num_snr; ++i)
     {
-        printf("For SNR = %lf \n\n", SNR[i]);
+        printf("\n\nFor SNR = %lf \n", SNR[i]);
 
-        double complex* Tx_OTA_signal = Transmission_Over_Air(TX_signal_repeated, SNR[i], len_Tx_Signal_repeated);
+        double complex* Tx_OTA_signal = Allocate_Array_1D(len_Tx_Signal_repeated);  
+
+        Transmission_Over_Air(TX_signal_repeated, Tx_OTA_signal, SNR[i], len_Tx_Signal_repeated);
 
         int rx_frame_size = 0;
         double complex* rx_frame = NULL;
         
         double Res[3]; // EVM_dB, EVM_AGC_DB, BER
-        Receiver(TX_signal_repeated, len_Tx_Signal_repeated, data_frames_number, Res);
+        Receiver(Tx_OTA_signal, len_Tx_Signal_repeated, data_frames_number, Res);
 
         EVM_AGC[i] = Res[0];
         EVM_AGC_DB[i] = Res[1];
         BER[i] = Res[2];   
         
-        Display_Double(Res, 3);
+        printf("\nEVM dB     = %lf", Res[0]);
+        printf("\nEVM_ACG dB = %lf", Res[1]);
+        printf("\nBER        = %lf", Res[2]);
     }
 
     printf("\nCode Run Successful!");
