@@ -93,7 +93,7 @@ void write_double_array_to_file(double * A, int len_A, char* fname)
     for (int i = 0; i < len_A; i++) 
     {
 
-        fprintf(file, "%.15e", A[i]);
+        fprintf(file, "%.2e", A[i]);
         if (i < len_A - 1) 
         {
             fprintf(file, "\t");  // Tab separator
@@ -1134,6 +1134,8 @@ int main()
     free(TX_signal_repeated);
     free(Data);
     Deallocate_Array_2D(Data_Payload_Mod, data_frames_number);
+
+    Display_Double(SNR, num_snr);
 
     write_double_array_to_file(SNR, num_snr, "Output_SNR.txt");
     write_double_array_to_file(EVM_dB, num_snr, "Output_EVM_AGC.txt");
