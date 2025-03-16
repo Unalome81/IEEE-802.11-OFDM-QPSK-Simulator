@@ -53,8 +53,9 @@ void Display_Double(double* X, int sz)
     printf("\n");
 }
 
-void write_complex_array_to_file(double complex* A, int len_A) {
-    FILE* file = fopen("Code_Output.txt", "w");  // Fixed filename
+void write_complex_array_to_file(double complex* A, int len_A, char* fname) 
+{
+    FILE* file = fopen(fname, "w");  
     if (file == NULL) {
         perror("Error opening file");
         return;
@@ -74,6 +75,28 @@ void write_complex_array_to_file(double complex* A, int len_A) {
         else 
         {
             printf("\n%d", i + 1);
+        }
+    }
+    fprintf(file, "\n");
+
+    fclose(file);
+}
+
+void write_double_array_to_file(double * A, int len_A, char* fname) 
+{
+    FILE* file = fopen(fname, "w");  
+    if (file == NULL) {
+        perror("Error opening file");
+        return;
+    }
+
+    for (int i = 0; i < len_A; i++) 
+    {
+
+        fprintf(file, "%.15e", A[i]);
+        if (i < len_A - 1) 
+        {
+            fprintf(file, "\t");  // Tab separator
         }
     }
     fprintf(file, "\n");
@@ -1084,7 +1107,7 @@ int main()
 
     double SNR[num_snr] = {6, 7, 8, 9, 10, 11, 12 ,13 , 14, 15};
 
-    double EVM_AGC[num_snr], EVM_AGC_DB[num_snr], BER[num_snr];
+    double EVM_dB[num_snr], EVM_AGC_dB[num_snr], BER[num_snr];
 
     for(int i = 0; i < num_snr; ++i)
     {
@@ -1099,8 +1122,8 @@ int main()
 
         free(Tx_OTA_signal);
 
-        EVM_AGC[i] = Res[0];
-        EVM_AGC_DB[i] = Res[1];
+        EVM_dB[i] = Res[0];
+        EVM_AGC_dB[i] = Res[1];
         BER[i] = Res[2];   
         
         printf("\nEVM dB     = %lf", Res[0]);
@@ -1111,6 +1134,11 @@ int main()
     free(TX_signal_repeated);
     free(Data);
     Deallocate_Array_2D(Data_Payload_Mod, data_frames_number);
+
+    write_double_array_to_file(SNR, num_snr, "Output_SNR.txt");
+    write_double_array_to_file(EVM_dB, num_snr, "Output_EVM_AGC.txt");
+    write_double_array_to_file(EVM_AGC_dB, num_snr, "Output_EVM_AGC_DB.txt");
+    write_double_array_to_file(BER, num_snr, "Output_BER.txt");
 
     printf("\nCode Run Successful!");
 
