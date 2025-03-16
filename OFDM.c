@@ -17,7 +17,7 @@
 #define ts_sec (1/fs_hz)  // Time period (50 ns)
 #define num_snr 10
 
-unsigned char message[] = "Hello! I am Vivaswan Nawani. How are you?";
+unsigned char message[] = "The Supreme Lord Shree Krishna said: I taught this eternal science of Yog to the Sun God, Vivasvan, who passed it on to Manu; and Manu, in turn, instructed it to Ikshvaku.";
 //"The Supreme Lord Shree Krishna said: I taught this eternal science of Yog to the Sun God, Vivasvan, who passed it on to Manu; and Manu, in turn, instructed it to Ikshvaku.";
 
 
@@ -206,77 +206,151 @@ void fft_shift(double complex *X, int sz)
 }
 
 // Discete Inverse Fourier Transform : O(N^2)
-void ifft(double complex *X, double complex *Y, int sz) // X = Frequency Domain, Y = Time Domain
-{
-    ifft_shift(X, sz); 
+// void ifft(double complex *X, double complex *Y, int sz) // X = Frequency Domain, Y = Time Domain
+// {
+//     ifft_shift(X, sz); 
 
-    double complex W;
+//     double complex W;
 
-    for (int i = 0; i < sz; ++i)
-    {
-        Y[i] = 0;
-        for (int j = 0; j < sz; ++j)
-        {
-            W = cexp((I * 2.0 * PI * i * j) / sz); 
-            Y[i] += X[j] * W;
-        }
-        Y[i] /= sz; 
-    }
-}
+//     for (int i = 0; i < sz; ++i)
+//     {
+//         Y[i] = 0;
+//         for (int j = 0; j < sz; ++j)
+//         {
+//             W = cexp((I * 2.0 * PI * i * j) / sz); 
+//             Y[i] += X[j] * W;
+//         }
+//         Y[i] /= sz; 
+//     }
+// }
+
+// void fft(double complex *X, double complex *Y, int sz) // X = Time Domain, Y = Frequency Domain
+// {
+//     double complex W;
+
+//     for (int i = 0; i < sz; ++i)
+//     {
+//         Y[i] = 0;
+//         for (int j = 0; j < sz; ++j)
+//         {
+//             W = cexp((-I * 2.0 * PI * j * i) / sz);
+//             Y[i] += X[j] * W;
+//         }
+//     }
+
+//     fft_shift(Y, sz); 
+// }
 
 void fft(double complex *X, double complex *Y, int sz) // X = Time Domain, Y = Frequency Domain
 {
-    double complex W;
-
-    for (int i = 0; i < sz; ++i)
-    {
-        Y[i] = 0;
-        for (int j = 0; j < sz; ++j)
-        {
-            W = cexp((-I * 2.0 * PI * j * i) / sz);
-            Y[i] += X[j] * W;
-        }
+    if (sz <= 1) {
+        Y[0] = X[0];
+        return;
     }
 
-    fft_shift(Y, sz); 
+    double complex *X_even = malloc(sz / 2 * sizeof(double complex));
+    double complex *X_odd = malloc(sz / 2 * sizeof(double complex));
+    double complex *Y_even = malloc(sz / 2 * sizeof(double complex));
+    double complex *Y_odd = malloc(sz / 2 * sizeof(double complex));
+
+    for (int i = 0; i < sz / 2; i++) {
+        X_even[i] = X[i * 2];
+        X_odd[i] = X[i * 2 + 1];
+    }
+
+    fft(X_even, Y_even, sz / 2);
+    fft(X_odd, Y_odd, sz / 2);
+
+    for (int k = 0; k < sz / 2; k++) {
+        double complex W = cexp(-I * 2.0 * PI * k / sz) * Y_odd[k];
+        Y[k] = Y_even[k] + W;
+        Y[k + sz / 2] = Y_even[k] - W;
+    }
+
+    free(X_even);
+    free(X_odd);
+    free(Y_even);
+    free(Y_odd);
+}
+
+void ifft(double complex *X, double complex *Y, int sz) // X = Frequency Domain, Y = Time Domain
+{
+    double complex *X_conj = malloc(sz * sizeof(double complex));
+    double complex *Y_tmp = malloc(sz * sizeof(double complex));
+
+    for (int i = 0; i < sz; i++) {
+        X_conj[i] = conj(X[i]);
+    }
+
+    fft(X_conj, Y_tmp, sz);
+
+    for (int i = 0; i < sz; i++) {
+        Y[i] = conj(Y_tmp[i]) / sz;
+    }
+
+    free(X_conj);
+    free(Y_tmp);
 }
 
 
-double complex* Convolution (double complex *Inp, double complex *H, int len_Inp, int len_H)
-{
-    int len_Out = len_Inp + len_H - 1;
+// double complex* Convolution (double complex *Inp, double complex *H, int len_Inp, int len_H)
+// {
+//     int len_Out = len_Inp + len_H - 1;
 
-    double complex *Inp_Padded = Allocate_Array_1D(len_Out);
-    Slice_Repeater(Inp, Inp_Padded, 0, 0, len_Inp, 1);
-    //for (int i = len_Inp; i < len_Out; i++) Inp_Padded[i] = 0;
+//     double complex *Inp_Padded = Allocate_Array_1D(len_Out);
+//     Slice_Repeater(Inp, Inp_Padded, 0, 0, len_Inp, 1);
+//     //for (int i = len_Inp; i < len_Out; i++) Inp_Padded[i] = 0;
 
-    double complex *H_Padded = Allocate_Array_1D(len_Out);
-    Slice_Repeater(H, H_Padded, 0, 0, len_H, 1);
-    //for (int i = len_H; i < len_Out; i++) H_Padded[i] = 0;
+//     double complex *H_Padded = Allocate_Array_1D(len_Out);
+//     Slice_Repeater(H, H_Padded, 0, 0, len_H, 1);
+//     //for (int i = len_H; i < len_Out; i++) H_Padded[i] = 0;
 
-    double complex *Inp_freq = Allocate_Array_1D(len_Out);
-    double complex *H_freq = Allocate_Array_1D(len_Out);
-    double complex *Out_freq = Allocate_Array_1D(len_Out);
+//     double complex *Inp_freq = Allocate_Array_1D(len_Out);
+//     double complex *H_freq = Allocate_Array_1D(len_Out);
+//     double complex *Out_freq = Allocate_Array_1D(len_Out);
 
-    fft(Inp_Padded, Inp_freq, len_Out);
-    fft(H_Padded, H_freq, len_Out);
+//     fft(Inp_Padded, Inp_freq, len_Out);
+//     fft(H_Padded, H_freq, len_Out);
 
-    for (int i = 0; i < len_Out; i++) 
-    {
-        Out_freq[i] = Inp_freq[i] * H_freq[i];
-    }
+//     for (int i = 0; i < len_Out; i++) 
+//     {
+//         Out_freq[i] = Inp_freq[i] * H_freq[i];
+//     }
+
+//     double complex *Out = Allocate_Array_1D(len_Out);
+
+//     ifft(Out_freq, Out, len_Out);
+    
+//     free(Inp_Padded);
+//     free(H_Padded);
+//     free(Inp_freq);
+//     free(H_freq);
+//     free(Out_freq);
+
+//     return Out;
+// }
+
+
+double complex* Convolution(double complex *Inp, double complex *H, int len_Inp, int len_H) {
+    int len_Out = len_Inp + len_H - 1;  // Output length
 
     double complex *Out = Allocate_Array_1D(len_Out);
 
-    ifft(Out_freq, Out, len_Out);
-    
-    free(Inp_Padded);
-    free(H_Padded);
-    free(Inp_freq);
-    free(H_freq);
-    free(Out_freq);
+  
+    for (int i = 0; i < len_Out; i++) 
+    {
+        Out[i] = 0.0 + 0.0 * I;
+    }
 
-    return Out;
+    for (int i = 0; i < len_Inp; i++) 
+    {
+        for (int j = 0; j < len_H; j++) 
+        {
+            Out[i + j] += Inp[i] * H[j];  
+        }
+    }
+
+    return Out; 
 }
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Transmitter and it's Processing Blocks %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
