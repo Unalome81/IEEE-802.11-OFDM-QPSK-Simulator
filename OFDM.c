@@ -15,7 +15,7 @@
 #define fc_hz 5e9  // Carrier frequency (5 GHz)
 #define fs_hz 20e6  // Sampling frequency (20 MHz)
 #define ts_sec (1/fs_hz)  // Time period (50 ns)
-#define num_snr 10
+#define num_snr 50
 
 unsigned char message[] = "The Supreme Lord Shree Krishna said: I taught this eternal science of Yog to the Sun God, Vivasvan, who passed it on to Manu; and Manu, in turn, instructed it to Ikshvaku.";
 //"The Supreme Lord Shree Krishna said: I taught this eternal science of Yog to the Sun God, Vivasvan, who passed it on to Manu; and Manu, in turn, instructed it to Ikshvaku.";
@@ -1179,7 +1179,12 @@ int main()
 
     double complex* TX_signal_repeated = Transmitter();
 
-    double SNR[num_snr] = {6, 7, 8, 9, 10, 11, 12 ,13 , 14, 15};
+    double SNR[num_snr];
+
+    for(int i = 0; i < num_snr; ++i)
+    {
+        SNR[i] = 1 + i;
+    }
 
     double EVM_dB[num_snr], EVM_AGC_dB[num_snr], BER[num_snr];
 
