@@ -81,7 +81,6 @@ void write_complex_array_to_file(double complex* A, int len_A) {
     fclose(file);
 }
 
-
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Helper functions for stack/heap memory allocation, fft, ifft, convolution and  slicing %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
 double complex* Allocate_Array_1D(int size) 
@@ -95,14 +94,14 @@ double complex* Allocate_Array_1D(int size)
 }
 
 // Function to allocate a 2D array of double complex
-double complex** Allocate_Array_2D(int data_frames_number, int cols) {
-    double complex **array = (double complex **)malloc(data_frames_number * sizeof(double complex *));
+double complex** Allocate_Array_2D(int rows, int cols) {
+    double complex **array = (double complex **)malloc(rows * sizeof(double complex *));
     if (array == NULL) {
         printf("Memory allocation failed for 2D array (row pointers)!\n");
         exit(1);
     }
 
-    for (int i = 0; i < data_frames_number; i++) {
+    for (int i = 0; i < rows; i++) {
         array[i] = (double complex *)calloc(cols, sizeof(double complex));
         if (array[i] == NULL) {
             printf("Memory allocation failed for 2D array (row %d)!\n", i);
@@ -110,6 +109,24 @@ double complex** Allocate_Array_2D(int data_frames_number, int cols) {
         }
     }
     return array;
+}
+
+void Deallocate_Array_2D(double complex **array, int rows) 
+{
+    if (array == NULL) 
+        return;
+
+    for (int i = 0; i < rows; i++) 
+    {
+        if (array[i] != NULL) 
+        {
+            free(array[i]); 
+            array[i] = NULL;
+        }
+    }
+
+    free(array);
+    array = NULL; 
 }
 
 void Slice_Repeater(double complex *X, double complex *Y, int starti, int lo, int hi, int r) // ind is starting index of Y i.e Output, lo and hi are the starting and ending indices of X(input), r is the number of times we are repeating
@@ -392,6 +409,8 @@ double complex* Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
 
     QPSK_Modulator(Data_Payload, Data_Payload_Mod, data_frames_number);
 
+    Deallocate_Array_2D(Data_Payload, data_frames_number);    
+
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Data Frames Generation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
     int pilot[] = {1,1,1,-1};
@@ -428,6 +447,8 @@ double complex* Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
         ifft(Data_Frames[i], Data_Frames_IFFT[i], 64);
     }
 
+    Deallocate_Array_2D(Data_Frames, data_frames_number);
+
     double complex **Data_Frames_Time_TX = Allocate_Array_2D(data_frames_number, 80);
 
     for(int i = 0; i < data_frames_number; ++i)
@@ -435,6 +456,8 @@ double complex* Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
         Slice_Repeater(Data_Frames_IFFT[i], Data_Frames_Time_TX[i], 0, 48, 64, 1);
         Slice_Repeater(Data_Frames_IFFT[i], Data_Frames_Time_TX[i], 16, 0, 64, 1);
     }
+
+    Deallocate_Array_2D(Data_Frames_IFFT, data_frames_number);
 
     Data_Frame_Size = data_frames_number * 80 + 160 + 160;
     double complex *Data_Frame_TX = Allocate_Array_1D(Data_Frame_Size);
@@ -450,6 +473,8 @@ double complex* Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
         start += 80;
     }
 
+    Deallocate_Array_2D(Data_Frames_Time_TX, data_frames_number);
+
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Oversampling %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
     int oversampling_rate_tx = 2; 
@@ -461,6 +486,8 @@ double complex* Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
         Data_Frame_TX_Oversamp[2*i] = Data_Frame_TX[i];
         Data_Frame_TX_Oversamp[2*i + 1] = 0;
     }  
+
+    free(Data_Frame_TX);
     
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Data Frame Oversampled convoulation with RRC FIlter%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
@@ -477,12 +504,16 @@ double complex* Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
 
     Slice_Repeater(Tx_signal, Tx_signal_repeated, 0, 0, len_out_sig, 10);
 
+    free(Tx_signal);
+    free(Data_Frame_TX_Oversamp);
+
     return Tx_signal_repeated;
 }
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Transmission over the air and it's Processing Blocks %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
-double gaussian_noise(double mean, double variance) {
+double gaussian_noise(double mean, double variance) 
+{
     double u1, u2, z0;
     
     u1 = ((double) rand() + 1.0) / ((double) RAND_MAX + 1.0);
@@ -622,6 +653,13 @@ int Packet_Selection(double complex* Corr_Out, int len_Corr_Out)
         }
     }
 
+    free(packet_idx_arr);
+    free(packet_idx_arr_sliced);
+    free(temp);
+    free(packet_front);
+    free(packet_front_sliced);
+    free(packet_front_idx);
+
     return packet_idx;
 }
 
@@ -725,13 +763,13 @@ void AGC_Receiver(double complex** Rx_Payload_No_Pilot, double complex** Rx_Payl
     }
 }
 
-void QPSK_Demodulator(double complex **Data_Payload, double complex **Data_Payload_Demod, int data_frames_number)
+void QPSK_Demodulator(double complex **Rx_Payload, double complex **Data_Payload_Demod, int data_frames_number)
 {
     for(int i = 0; i < data_frames_number; ++i)
     {
         for(int j = 0; j < 48; j++)
         {
-            double a = creal(Data_Payload[i][j]), b = cimag(Data_Payload[i][j]);
+            double a = creal(Rx_Payload[i][j]), b = cimag(Rx_Payload[i][j]);
 
             int c = 0, d = 0;
 
@@ -825,9 +863,13 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
     double complex *Corr_Out = Packet_Detection(Rx_Signal, len_Rx_Signal, &len_Corr_Out);
 
+    free(Rx_Signal);
+
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Packet Selection %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
     int packet_idx = Packet_Selection(Corr_Out, len_Corr_Out);
+
+    free(Corr_Out);
 
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Down Sampling %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
@@ -845,17 +887,23 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
         index += 1;
     }
 
+    free(Rx_filter_signal);
+
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Coarse CFO Estimation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
     double complex* rx_frame_after_coarse = Allocate_Array_1D(rx_frame_size);
 
     Coarse_CFO_Estimation(rx_frame, rx_frame_after_coarse, rx_frame_size);
 
+    free(rx_frame);
+
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Fine CFO Estimation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
     double complex* rx_frame_after_fine = Allocate_Array_1D(rx_frame_size);
 
     Fine_CFO_Estimation(rx_frame_after_coarse, rx_frame_after_fine, rx_frame_size);
+
+    free(rx_frame_after_coarse);
 
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Channel Estimation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
@@ -874,12 +922,16 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
         Slice_Repeater(rx_frame_after_fine, Rx_Payload_Time[i], 0, lo, hi, 1);
     }
 
+    free(rx_frame_after_fine);
+
     double complex** Rx_Payload_Frequency = Allocate_Array_2D(data_frames_number, N_FFT);
 
     for(int i = 0; i < data_frames_number; ++i)
     {
         fft(Rx_Payload_Time[i], Rx_Payload_Frequency[i], N_FFT);
     }
+
+    Deallocate_Array_2D(Rx_Payload_Time, data_frames_number);
 
     double complex** Rx_Payload_Frequency_Equalizer = Allocate_Array_2D(data_frames_number, N_FFT);
 
@@ -890,6 +942,9 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
             Rx_Payload_Frequency_Equalizer[i][j] = Rx_Payload_Frequency[i][j] / H_est[j];
         }
     }
+
+    free(H_est);
+    Deallocate_Array_2D(Rx_Payload_Frequency, data_frames_number);
 
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% De Mapping %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
@@ -905,6 +960,8 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
         Slice_Repeater(Rx_Payload_Frequency_Equalizer[i], Rx_Payload_No_Pilot[i], 43, 54, 59, 1);
     }
 
+    Deallocate_Array_2D(Rx_Payload_Frequency_Equalizer, data_frames_number);
+
      //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% AGC for RX_Data_Payload %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
     double complex** Rx_Payload_Final = Allocate_Array_2D(data_frames_number, 48);
@@ -916,9 +973,6 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
     double complex** Rx_Payload_Demod = Allocate_Array_2D(data_frames_number, 96);
 
     QPSK_Demodulator(Rx_Payload_Final, Rx_Payload_Demod, data_frames_number);
-
-    write_complex_array_to_file(Rx_Payload_Demod[0], 96);
-
 
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Combining all Data Frames %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
@@ -937,6 +991,8 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
         }
     }
 
+    Deallocate_Array_2D(Rx_Payload_Demod, data_frames_number);
+
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% EVM Calculation (Before AGC) %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
     double complex error = 0;
@@ -952,6 +1008,8 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
             data_payload_square_sum += pow(cabs(Data_Payload_Mod[i][j]), 2);
         }
     }
+
+    Deallocate_Array_2D(Rx_Payload_No_Pilot, data_frames_number);
 
     double evm = 0, evm_dB = 0;
 
@@ -974,6 +1032,8 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
             data_payload_square_sum += pow(cabs(Data_Payload_Mod[i][j]), 2);
         }
     }
+
+    Deallocate_Array_2D(Rx_Payload_Final, data_frames_number);
 
     double evm_AGC = 0, evm_AGC_dB = 0;
 
@@ -1004,6 +1064,8 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
     Message_Generator(Data_Rx, msg_RX, total_bits);
 
+    free(Data_Rx);
+
     printf("\nReceived Message: \n");
     for(int i = 0; i < msg_Rx_size; ++i)
     {
@@ -1031,12 +1093,11 @@ int main()
         double complex* Tx_OTA_signal = Allocate_Array_1D(len_Tx_Signal_repeated);  
 
         Transmission_Over_Air(TX_signal_repeated, Tx_OTA_signal, SNR[i], len_Tx_Signal_repeated);
-
-        int rx_frame_size = 0;
-        double complex* rx_frame = NULL;
         
         double Res[3]; // EVM_dB, EVM_AGC_DB, BER
         Receiver(Tx_OTA_signal, len_Tx_Signal_repeated, data_frames_number, Res);
+
+        free(Tx_OTA_signal);
 
         EVM_AGC[i] = Res[0];
         EVM_AGC_DB[i] = Res[1];
@@ -1046,6 +1107,10 @@ int main()
         printf("\nEVM_ACG dB = %lf", Res[1]);
         printf("\nBER        = %lf", Res[2]);
     }
+
+    free(TX_signal_repeated);
+    free(Data);
+    Deallocate_Array_2D(Data_Payload_Mod, data_frames_number);
 
     printf("\nCode Run Successful!");
 
