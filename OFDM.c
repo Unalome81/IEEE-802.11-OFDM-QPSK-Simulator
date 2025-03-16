@@ -15,7 +15,7 @@
 #define fc_hz 5e9  // Carrier frequency (5 GHz)
 #define fs_hz 20e6  // Sampling frequency (20 MHz)
 #define ts_sec (1/fs_hz)  // Time period (50 ns)
-#define num_snr 50
+#define num_snr 35
 
 unsigned char message[] = "The Supreme Lord Shree Krishna said: I taught this eternal science of Yog to the Sun God, Vivasvan, who passed it on to Manu; and Manu, in turn, instructed it to Ikshvaku.";
 //"The Supreme Lord Shree Krishna said: I taught this eternal science of Yog to the Sun God, Vivasvan, who passed it on to Manu; and Manu, in turn, instructed it to Ikshvaku.";
@@ -1213,8 +1213,6 @@ int main()
     free(TX_signal_repeated);
     free(Data);
     Deallocate_Array_2D(Data_Payload_Mod, data_frames_number);
-
-    Display_Double(SNR, num_snr);
 
     write_double_array_to_file(SNR, num_snr, "Output_SNR.txt");
     write_double_array_to_file(EVM_dB, num_snr, "Output_EVM_AGC.txt");
