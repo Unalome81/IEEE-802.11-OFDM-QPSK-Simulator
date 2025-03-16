@@ -1,14 +1,29 @@
 import matplotlib.pyplot as plt
 
-def read_values_from_file(filename):
-    with open(filename, "r") as file:
-        values = [float(line.strip()) for line in file if line.strip()]
-    return values
+def read_double_file(filename):
+    """Reads a file containing double values and returns a list of floats, handling INF values."""
+    with open(filename, 'r') as f:
+        content = f.read().replace('\n', ' ')  # Read entire file and remove newlines
 
-snr = read_values_from_file("Output_SNR.txt")
-evm_dB = read_values_from_file("Output_EVM_AGC.txt")
-evm_agc_dB = read_values_from_file("Output_EVM_AGC_DB.txt")
-ber = read_values_from_file("Output_BER.txt")
+    words = content.split()  # Split into individual words
+    data = []
+    
+    for word in words:
+        # Handle infinity cases
+        if "INF" in word or "inf" in word:
+            value = float("inf") if "-" not in word else float("-inf")
+        else:
+            value = float(word)
+        
+        data.append(value)
+
+    print(f"Extracted {len(data)} numbers.")  # Debugging output
+    return data
+
+snr = read_double_file("Output_SNR.txt")
+evm_dB = read_double_file("Output_EVM_AGC.txt")
+evm_agc_dB = read_double_file("Output_EVM_AGC_DB.txt")
+ber = read_double_file("Output_BER.txt")
 
 plt.figure(figsize=(10, 5))
 plt.plot(snr, evm_dB, label="EVM_dB", marker="o", linestyle="-")
@@ -29,3 +44,5 @@ plt.title("BER vs SNR")
 plt.grid(True)
 plt.legend()
 plt.show()
+
+print(snr)
