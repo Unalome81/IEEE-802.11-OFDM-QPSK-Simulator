@@ -15,9 +15,9 @@
 #define fc_hz 5e9  // Carrier frequency (5 GHz)
 #define fs_hz 20e6  // Sampling frequency (20 MHz)
 #define ts_sec (1/fs_hz)  // Time period (50 ns)
-#define num_snr 35
+#define num_snr 20
 
-unsigned char message[] = "The Supreme Lord Shree Krishna said: I taught this eternal science of Yog to the Sun God, Vivasvan, who passed it on to Manu; and Manu, in turn, instructed it to Ikshvaku.";
+unsigned char message[] = "Hello, I am Vivaswan!";
 //"The Supreme Lord Shree Krishna said: I taught this eternal science of Yog to the Sun God, Vivasvan, who passed it on to Manu; and Manu, in turn, instructed it to Ikshvaku.";
 
 
@@ -205,7 +205,7 @@ void fft_shift(double complex *X, int sz)
     }
 }
 
-// Discete Inverse Fourier Transform : O(N^2)
+//Discete Inverse Fourier Transform : O(N^2)
 // void ifft(double complex *X, double complex *Y, int sz) // X = Frequency Domain, Y = Time Domain
 // {
 //     ifft_shift(X, sz); 
@@ -241,7 +241,7 @@ void fft_shift(double complex *X, int sz)
 //     fft_shift(Y, sz); 
 // }
 
-void fft(double complex *X, double complex *Y, int sz) // X = Time Domain, Y = Frequency Domain
+void fft_Cooley(double complex *X, double complex *Y, int sz) // X = Time Domain, Y = Frequency Domain
 {
     if (sz <= 1) {
         Y[0] = X[0];
@@ -258,8 +258,8 @@ void fft(double complex *X, double complex *Y, int sz) // X = Time Domain, Y = F
         X_odd[i] = X[i * 2 + 1];
     }
 
-    fft(X_even, Y_even, sz / 2);
-    fft(X_odd, Y_odd, sz / 2);
+    fft_Cooley(X_even, Y_even, sz / 2);
+    fft_Cooley(X_odd, Y_odd, sz / 2);
 
     for (int k = 0; k < sz / 2; k++) {
         double complex W = cexp(-I * 2.0 * PI * k / sz) * Y_odd[k];
@@ -273,8 +273,16 @@ void fft(double complex *X, double complex *Y, int sz) // X = Time Domain, Y = F
     free(Y_odd);
 }
 
+void fft(double complex *X, double complex *Y, int sz)
+{
+    fft_Cooley(X, Y, sz);
+    fft_shift(Y, sz);
+}
+
 void ifft(double complex *X, double complex *Y, int sz) // X = Frequency Domain, Y = Time Domain
 {
+    ifft_shift(X, sz);
+
     double complex *X_conj = malloc(sz * sizeof(double complex));
     double complex *Y_tmp = malloc(sz * sizeof(double complex));
 
@@ -291,44 +299,6 @@ void ifft(double complex *X, double complex *Y, int sz) // X = Frequency Domain,
     free(X_conj);
     free(Y_tmp);
 }
-
-
-// double complex* Convolution (double complex *Inp, double complex *H, int len_Inp, int len_H)
-// {
-//     int len_Out = len_Inp + len_H - 1;
-
-//     double complex *Inp_Padded = Allocate_Array_1D(len_Out);
-//     Slice_Repeater(Inp, Inp_Padded, 0, 0, len_Inp, 1);
-//     //for (int i = len_Inp; i < len_Out; i++) Inp_Padded[i] = 0;
-
-//     double complex *H_Padded = Allocate_Array_1D(len_Out);
-//     Slice_Repeater(H, H_Padded, 0, 0, len_H, 1);
-//     //for (int i = len_H; i < len_Out; i++) H_Padded[i] = 0;
-
-//     double complex *Inp_freq = Allocate_Array_1D(len_Out);
-//     double complex *H_freq = Allocate_Array_1D(len_Out);
-//     double complex *Out_freq = Allocate_Array_1D(len_Out);
-
-//     fft(Inp_Padded, Inp_freq, len_Out);
-//     fft(H_Padded, H_freq, len_Out);
-
-//     for (int i = 0; i < len_Out; i++) 
-//     {
-//         Out_freq[i] = Inp_freq[i] * H_freq[i];
-//     }
-
-//     double complex *Out = Allocate_Array_1D(len_Out);
-
-//     ifft(Out_freq, Out, len_Out);
-    
-//     free(Inp_Padded);
-//     free(H_Padded);
-//     free(Inp_freq);
-//     free(H_freq);
-//     free(Out_freq);
-
-//     return Out;
-// }
 
 
 double complex* Convolution(double complex *Inp, double complex *H, int len_Inp, int len_H) {
@@ -1183,7 +1153,7 @@ int main()
 
     for(int i = 0; i < num_snr; ++i)
     {
-        SNR[i] = 1 + i;
+        SNR[i] = 5 + i;
     }
 
     double EVM_dB[num_snr], EVM_AGC_dB[num_snr], BER[num_snr];
