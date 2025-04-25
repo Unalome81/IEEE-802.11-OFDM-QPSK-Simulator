@@ -15,7 +15,7 @@
 #define fc_hz 5e9  // Carrier frequency (5 GHz)
 #define fs_hz 20e6  // Sampling frequency (20 MHz)
 #define ts_sec (1/fs_hz)  // Time period (50 ns)
-#define num_snr 20
+#define num_snr 35
 
 unsigned char message[] = "Hello, I am Vivaswan!";
 //"The Supreme Lord Shree Krishna said: I taught this eternal science of Yog to the Sun God, Vivasvan, who passed it on to Manu; and Manu, in turn, instructed it to Ikshvaku.";
@@ -25,17 +25,17 @@ int len_Tx_Signal_repeated = 0, data_frames_number = 0, Data_Frame_Size = 0; // 
 
 int len_RRC_Coeff = 21, len_RRC_rx = 10;
 
-double complex *Data = NULL; // This is where all the binary data is stored
+float complex *Data = NULL; // This is where all the binary data is stored
 
-double complex **Data_Payload_Mod = NULL;
+float complex **Data_Payload_Mod = NULL;
 
-double complex RRC_Filter_Tx[21] = {-0.000454720514876223, 0.00353689555574986, -0.00714560809091226, 0.00757906190517828, 0.00214368242727367, -0.0106106866672496, 0.0300115539818315, -0.0530534333362480, -0.0750288849545787, 0.409168714634052, 0.803738600397980, 0.409168714634052, -0.0750288849545787, -0.0530534333362480, 0.0300115539818315, -0.0106106866672496, 0.00214368242727367, 0.00757906190517828, -0.00714560809091226, 0.00353689555574986, -0.000454720514876223};
+float complex RRC_Filter_Tx[21] = {-0.000454720514876223, 0.00353689555574986, -0.00714560809091226, 0.00757906190517828, 0.00214368242727367, -0.0106106866672496, 0.0300115539818315, -0.0530534333362480, -0.0750288849545787, 0.409168714634052, 0.803738600397980, 0.409168714634052, -0.0750288849545787, -0.0530534333362480, 0.0300115539818315, -0.0106106866672496, 0.00214368242727367, 0.00757906190517828, -0.00714560809091226, 0.00353689555574986, -0.000454720514876223};
 
-double complex Long_preamble_slot_Frequency[N_FFT]; // Size = N_FFT
+float complex Long_preamble_slot_Frequency[N_FFT]; // Size = N_FFT
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Helper Functions for Debugging %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
-void Display(double complex *X, int sz)
+void Display(float complex *X, int sz)
 {
     for (int i = 0; i < sz; i++) 
     {
@@ -44,7 +44,7 @@ void Display(double complex *X, int sz)
     printf("\n");
 }
 
-void Display_Double(double* X, int sz)
+void Display_float(float* X, int sz)
 {
     for (int i = 0; i < sz; i++) 
     {
@@ -53,7 +53,7 @@ void Display_Double(double* X, int sz)
     printf("\n");
 }
 
-void write_complex_array_to_file(double complex* A, int len_A, char* fname) 
+void write_complex_array_to_file(float complex* A, int len_A, char* fname) 
 {
     FILE* file = fopen(fname, "w");  
     if (file == NULL) {
@@ -82,7 +82,7 @@ void write_complex_array_to_file(double complex* A, int len_A, char* fname)
     fclose(file);
 }
 
-void write_double_array_to_file(double * A, int len_A, char* fname) 
+void write_float_array_to_file(float * A, int len_A, char* fname) 
 {
     FILE* file = fopen(fname, "w");  
     if (file == NULL) {
@@ -106,9 +106,9 @@ void write_double_array_to_file(double * A, int len_A, char* fname)
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Helper functions for stack/heap memory allocation, fft, ifft, convolution and  slicing %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
-double complex* Allocate_Array_1D(int size) 
+float complex* Allocate_Array_1D(int size) 
 {
-    double complex *array = (double complex *)calloc(size, sizeof(double complex));
+    float complex *array = (float complex *)calloc(size, sizeof(float complex));
     if (array == NULL) {
         printf("Memory allocation failed for 1D array!\n");
         exit(1);
@@ -116,16 +116,16 @@ double complex* Allocate_Array_1D(int size)
     return array;
 }
 
-// Function to allocate a 2D array of double complex
-double complex** Allocate_Array_2D(int rows, int cols) {
-    double complex **array = (double complex **)malloc(rows * sizeof(double complex *));
+// Function to allocate a 2D array of float complex
+float complex** Allocate_Array_2D(int rows, int cols) {
+    float complex **array = (float complex **)malloc(rows * sizeof(float complex *));
     if (array == NULL) {
         printf("Memory allocation failed for 2D array (row pointers)!\n");
         exit(1);
     }
 
     for (int i = 0; i < rows; i++) {
-        array[i] = (double complex *)calloc(cols, sizeof(double complex));
+        array[i] = (float complex *)calloc(cols, sizeof(float complex));
         if (array[i] == NULL) {
             printf("Memory allocation failed for 2D array (row %d)!\n", i);
             exit(1);
@@ -134,7 +134,7 @@ double complex** Allocate_Array_2D(int rows, int cols) {
     return array;
 }
 
-void Deallocate_Array_2D(double complex **array, int rows) 
+void Deallocate_Array_2D(float complex **array, int rows) 
 {
     if (array == NULL) 
         return;
@@ -152,7 +152,7 @@ void Deallocate_Array_2D(double complex **array, int rows)
     array = NULL; 
 }
 
-void Slice_Repeater(double complex *X, double complex *Y, int starti, int lo, int hi, int r) // ind is starting index of Y i.e Output, lo and hi are the starting and ending indices of X(input), r is the number of times we are repeating
+void Slice_Repeater(float complex *X, float complex *Y, int starti, int lo, int hi, int r) // ind is starting index of Y i.e Output, lo and hi are the starting and ending indices of X(input), r is the number of times we are repeating
 {
     int index = starti; 
 
@@ -167,10 +167,10 @@ void Slice_Repeater(double complex *X, double complex *Y, int starti, int lo, in
 }
 
 // Cyclically Shifts frequency domain array before discrete ifft
-void ifft_shift(double complex *X, int sz) {
+void ifft_shift(float complex *X, int sz) {
     int mid = sz / 2; 
 
-    double complex temp[sz]; 
+    float complex temp[sz]; 
 
     for (int i = 0; i < sz; i++) 
     {
@@ -186,11 +186,11 @@ void ifft_shift(double complex *X, int sz) {
 
 // Cyclically Shifts frequency domain array before discrete fft
 
-void fft_shift(double complex *X, int sz) 
+void fft_shift(float complex *X, int sz) 
 {
     int mid = sz / 2; 
 
-    double complex temp[sz]; 
+    float complex temp[sz]; 
 
     for (int i = 0; i < sz; i++) 
     {
@@ -206,11 +206,11 @@ void fft_shift(double complex *X, int sz)
 }
 
 //Discete Inverse Fourier Transform : O(N^2)
-// void ifft(double complex *X, double complex *Y, int sz) // X = Frequency Domain, Y = Time Domain
+// void ifft(float complex *X, float complex *Y, int sz) // X = Frequency Domain, Y = Time Domain
 // {
 //     ifft_shift(X, sz); 
 
-//     double complex W;
+//     float complex W;
 
 //     for (int i = 0; i < sz; ++i)
 //     {
@@ -224,9 +224,9 @@ void fft_shift(double complex *X, int sz)
 //     }
 // }
 
-// void fft(double complex *X, double complex *Y, int sz) // X = Time Domain, Y = Frequency Domain
+// void fft(float complex *X, float complex *Y, int sz) // X = Time Domain, Y = Frequency Domain
 // {
-//     double complex W;
+//     float complex W;
 
 //     for (int i = 0; i < sz; ++i)
 //     {
@@ -241,17 +241,17 @@ void fft_shift(double complex *X, int sz)
 //     fft_shift(Y, sz); 
 // }
 
-void fft_Cooley(double complex *X, double complex *Y, int sz) // X = Time Domain, Y = Frequency Domain
+void fft_Cooley(float complex *X, float complex *Y, int sz) // X = Time Domain, Y = Frequency Domain
 {
     if (sz <= 1) {
         Y[0] = X[0];
         return;
     }
 
-    double complex *X_even = malloc(sz / 2 * sizeof(double complex));
-    double complex *X_odd = malloc(sz / 2 * sizeof(double complex));
-    double complex *Y_even = malloc(sz / 2 * sizeof(double complex));
-    double complex *Y_odd = malloc(sz / 2 * sizeof(double complex));
+    float complex *X_even = malloc(sz / 2 * sizeof(float complex));
+    float complex *X_odd = malloc(sz / 2 * sizeof(float complex));
+    float complex *Y_even = malloc(sz / 2 * sizeof(float complex));
+    float complex *Y_odd = malloc(sz / 2 * sizeof(float complex));
 
     for (int i = 0; i < sz / 2; i++) {
         X_even[i] = X[i * 2];
@@ -262,7 +262,7 @@ void fft_Cooley(double complex *X, double complex *Y, int sz) // X = Time Domain
     fft_Cooley(X_odd, Y_odd, sz / 2);
 
     for (int k = 0; k < sz / 2; k++) {
-        double complex W = cexp(-I * 2.0 * PI * k / sz) * Y_odd[k];
+        float complex W = cexp(-I * 2.0 * PI * k / sz) * Y_odd[k];
         Y[k] = Y_even[k] + W;
         Y[k + sz / 2] = Y_even[k] - W;
     }
@@ -273,18 +273,18 @@ void fft_Cooley(double complex *X, double complex *Y, int sz) // X = Time Domain
     free(Y_odd);
 }
 
-void fft(double complex *X, double complex *Y, int sz)
+void fft(float complex *X, float complex *Y, int sz)
 {
     fft_Cooley(X, Y, sz);
     fft_shift(Y, sz);
 }
 
-void ifft(double complex *X, double complex *Y, int sz) // X = Frequency Domain, Y = Time Domain
+void ifft(float complex *X, float complex *Y, int sz) // X = Frequency Domain, Y = Time Domain
 {
     ifft_shift(X, sz);
 
-    double complex *X_conj = malloc(sz * sizeof(double complex));
-    double complex *Y_tmp = malloc(sz * sizeof(double complex));
+    float complex *X_conj = malloc(sz * sizeof(float complex));
+    float complex *Y_tmp = malloc(sz * sizeof(float complex));
 
     for (int i = 0; i < sz; i++) {
         X_conj[i] = conj(X[i]);
@@ -301,10 +301,10 @@ void ifft(double complex *X, double complex *Y, int sz) // X = Frequency Domain,
 }
 
 
-double complex* Convolution(double complex *Inp, double complex *H, int len_Inp, int len_H) {
+float complex* Convolution(float complex *Inp, float complex *H, int len_Inp, int len_H) {
     int len_Out = len_Inp + len_H - 1;  // Output length
 
-    double complex *Out = Allocate_Array_1D(len_Out);
+    float complex *Out = Allocate_Array_1D(len_Out);
 
   
     for (int i = 0; i < len_Out; i++) 
@@ -325,17 +325,17 @@ double complex* Convolution(double complex *Inp, double complex *H, int len_Inp,
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Transmitter and it's Processing Blocks %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
-void Preamble_Generator(double scale, double complex *P_k, double complex *virtual_subcarrier, double complex *Preamble, int type)
+void Preamble_Generator(float scale, float complex *P_k, float complex *virtual_subcarrier, float complex *Preamble, int type)
 {
-    //double complex Preamble[160];
+    //float complex Preamble[160];
     // Scaling S_k
     for (int i = 0; i < 53; i++) 
     {
         P_k[i] *= scale;
     }    
 
-    double complex preamble_freq[N_FFT] = {0};
-    double complex preamble_time[N_FFT] = {0};
+    float complex preamble_freq[N_FFT] = {0};
+    float complex preamble_time[N_FFT] = {0};
 
     Slice_Repeater(virtual_subcarrier, preamble_freq, 0, 0, 6, 1);
     Slice_Repeater(P_k, preamble_freq, 6, 0, 54, 1);
@@ -372,7 +372,7 @@ void Decimal_To_Binary(int msg, int* msg_bits)
     }
 }
 
-void QPSK_Modulator(double complex **Data_Payload, double complex **Data_Payload_Mod, int data_frames_number)
+void QPSK_Modulator(float complex **Data_Payload, float complex **Data_Payload_Mod, int data_frames_number)
 {
     for(int i = 0; i < data_frames_number; ++i)
     {
@@ -424,7 +424,7 @@ void Data_Generator()
     }    
 }
 
-double complex* Transmitter() // Functions Used: Data_Generator(), Preamble_Generator(), IFFT(), QPSK_Modulator(), Slice_Repeater(), Convoulation()
+float complex* Transmitter() // Functions Used: Data_Generator(), Preamble_Generator(), IFFT(), QPSK_Modulator(), Slice_Repeater(), Convoulation()
 {
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Data Generation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
@@ -433,14 +433,14 @@ double complex* Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
 
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Preamble Generation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
-    double complex Short_Preamble[160], Long_Preamble[160];
+    float complex Short_Preamble[160], Long_Preamble[160];
 
     // Scale Factor
-    double scale = sqrt(13.0 / 6.0);
+    float scale = sqrt(13.0 / 6.0);
 
-    double complex virtual_subcarrier[11] = {0};
+    float complex virtual_subcarrier[11] = {0};
 
-    double complex S_k[53] = 
+    float complex S_k[53] = 
     {
     0, 0, 1 + 1*I, 0, 0, 0, -1 - 1*I, 0, 0, 0, 
     1 + 1*I, 0, 0, 0, -1 - 1*I, 0, 0, 0, -1 - 1*I, 0, 0, 0, 
@@ -451,7 +451,7 @@ double complex* Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
 
     Preamble_Generator(scale, S_k, virtual_subcarrier, Short_Preamble, 0); //0 is short, 1 is long
 
-    double complex L_k[53] ={1,1,-1,-1,1,1,-1,1,-1,1,1,1,1,1,1,-1,-1,1,1,-1,1,-1,1,1,1,1,0,1,-1,-1,1,1,-1,1,-1,1,-1,-1,-1,-1,-1,1,1,-1,-1,1,-1,1,-1,1,1,1,1};
+    float complex L_k[53] ={1,1,-1,-1,1,1,-1,1,-1,1,1,1,1,1,1,-1,-1,1,1,-1,1,-1,1,1,1,1,0,1,-1,-1,1,1,-1,1,-1,1,-1,-1,-1,-1,-1,1,1,-1,-1,1,-1,1,-1,1,1,1,1};
 
 
     scale = 1;
@@ -459,7 +459,7 @@ double complex* Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
 
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Converting Data to Data Payload %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
-    double complex **Data_Payload = Allocate_Array_2D(data_frames_number, 96);
+    float complex **Data_Payload = Allocate_Array_2D(data_frames_number, 96);
 
     for(int i = 0; i < data_frames_number; ++i)
     {
@@ -481,7 +481,7 @@ double complex* Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Data Frames Generation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
     int pilot[] = {1,1,1,-1};
-    double complex **Data_Frames = Allocate_Array_2D(data_frames_number, 64);
+    float complex **Data_Frames = Allocate_Array_2D(data_frames_number, 64);
 
     for(int i = 0; i < data_frames_number; ++i)
     {
@@ -507,7 +507,7 @@ double complex* Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
         Slice_Repeater(virtual_subcarrier, Data_Frames[i], 59, 6, 11, 1); // Filled = 64    
     }
 
-    double complex **Data_Frames_IFFT = Allocate_Array_2D(data_frames_number, 64);
+    float complex **Data_Frames_IFFT = Allocate_Array_2D(data_frames_number, 64);
 
     for(int i = 0; i < data_frames_number; ++i)
     {
@@ -516,7 +516,7 @@ double complex* Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
 
     Deallocate_Array_2D(Data_Frames, data_frames_number);
 
-    double complex **Data_Frames_Time_TX = Allocate_Array_2D(data_frames_number, 80);
+    float complex **Data_Frames_Time_TX = Allocate_Array_2D(data_frames_number, 80);
 
     for(int i = 0; i < data_frames_number; ++i)
     {
@@ -527,7 +527,7 @@ double complex* Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
     Deallocate_Array_2D(Data_Frames_IFFT, data_frames_number);
 
     Data_Frame_Size = data_frames_number * 80 + 160 + 160;
-    double complex *Data_Frame_TX = Allocate_Array_1D(Data_Frame_Size);
+    float complex *Data_Frame_TX = Allocate_Array_1D(Data_Frame_Size);
 
     Slice_Repeater(Short_Preamble, Data_Frame_TX, 0, 0, 160, 1);   // Filled = 160
     Slice_Repeater(Long_Preamble, Data_Frame_TX, 160, 0, 160, 1);  // Filled = 320
@@ -546,7 +546,7 @@ double complex* Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
 
     int oversampling_rate_tx = 2; 
 
-    double complex *Data_Frame_TX_Oversamp = Allocate_Array_1D(oversampling_rate_tx * Data_Frame_Size);
+    float complex *Data_Frame_TX_Oversamp = Allocate_Array_1D(oversampling_rate_tx * Data_Frame_Size);
 
     for(int i = 0; i < Data_Frame_Size; ++i)
     {
@@ -562,10 +562,10 @@ double complex* Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
   
     int len_out_sig = len_inp_sig + len_RRC_Coeff - 1; 
 
-    double complex *Tx_signal = Convolution(Data_Frame_TX_Oversamp, RRC_Filter_Tx, len_inp_sig, len_RRC_Coeff);
+    float complex *Tx_signal = Convolution(Data_Frame_TX_Oversamp, RRC_Filter_Tx, len_inp_sig, len_RRC_Coeff);
 
     len_Tx_Signal_repeated = 10 * len_out_sig;
-    double complex *Tx_signal_repeated = Allocate_Array_1D(len_Tx_Signal_repeated);
+    float complex *Tx_signal_repeated = Allocate_Array_1D(len_Tx_Signal_repeated);
 
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Repeating Tx Signal 10 times %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -579,12 +579,12 @@ double complex* Transmitter() // Functions Used: Data_Generator(), Preamble_Gene
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Transmission over the air and it's Processing Blocks %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
-double gaussian_noise(double mean, double variance) 
+float gaussian_noise(float mean, float variance) 
 {
-    double u1, u2, z0;
+    float u1, u2, z0;
     
-    u1 = ((double) rand() + 1.0) / ((double) RAND_MAX + 1.0);
-    u2 = ((double) rand() + 1.0) / ((double) RAND_MAX + 1.0);
+    u1 = ((float) rand() + 1.0) / ((float) RAND_MAX + 1.0);
+    u2 = ((float) rand() + 1.0) / ((float) RAND_MAX + 1.0);
 
     z0 = sqrt(-2.0 * log(u1)) * cos(2.0 * 3.14159 * u2);
 
@@ -592,9 +592,9 @@ double gaussian_noise(double mean, double variance)
 }
 
 
-void Transmission_Over_Air(double complex* TX_signal, complex double* TX_OTA_signal, double snr, int len_Tx_Signal)
+void Transmission_Over_Air(float complex* TX_signal, float complex* TX_OTA_signal, float snr, int len_Tx_Signal)
 {
-    double Tx_signal_power = 0.0;
+    float Tx_signal_power = 0.0;
     for (int i = 0; i < len_Tx_Signal; i++) 
     {
         Tx_signal_power += (cabs(TX_signal[i])*cabs(TX_signal[i]));
@@ -602,13 +602,13 @@ void Transmission_Over_Air(double complex* TX_signal, complex double* TX_OTA_sig
 
     Tx_signal_power /= len_Tx_Signal; 
 
-    double snr_linear = pow(10, snr / 10);
+    float snr_linear = pow(10, snr / 10);
 
-    double noise_power = Tx_signal_power / snr_linear;
+    float noise_power = Tx_signal_power / snr_linear;
 
     for(int i = 0 ; i < len_Tx_Signal; ++i)
     {
-        double noise = sqrt(noise_power) * (gaussian_noise(0, 1) + I*gaussian_noise(0, 1));
+        float noise = sqrt(noise_power) * (gaussian_noise(0, 1) + I*gaussian_noise(0, 1));
 
         TX_OTA_signal[i] = TX_signal[i] + noise;
     }
@@ -616,18 +616,18 @@ void Transmission_Over_Air(double complex* TX_signal, complex double* TX_OTA_sig
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Receiver and it's Processing Blocks %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
-double complex* Packet_Detection(double complex *Rx_Signal, int len_RX_Signal, int* len_Corr_Out)
+float complex* Packet_Detection(float complex *Rx_Signal, int len_RX_Signal, int* len_Corr_Out)
 {
     int delay_param= 16;
     int window_length = 32;
     int lenCorr_arr = len_RX_Signal - delay_param + 1 - window_length;
 
-    double complex* corr_out = Allocate_Array_1D(lenCorr_arr);
+    float complex* corr_out = Allocate_Array_1D(lenCorr_arr);
 
     for (int i = 0;i < lenCorr_arr; ++i)
     {
-        double complex corr_temp_arr = 0;
-        double complex peak_temp_arr = 0;
+        float complex corr_temp_arr = 0;
+        float complex peak_temp_arr = 0;
 
         for (int k = 0; k < window_length; ++k)
         {
@@ -642,10 +642,10 @@ double complex* Packet_Detection(double complex *Rx_Signal, int len_RX_Signal, i
     return corr_out;   
 }
 
-int Packet_Selection(double complex* Corr_Out, int len_Corr_Out)
+int Packet_Selection(float complex* Corr_Out, int len_Corr_Out)
 {
-    double packet_threshold = 0.75;
-    double complex *packet_idx_arr = Allocate_Array_1D(len_Corr_Out);
+    float packet_threshold = 0.75;
+    float complex *packet_idx_arr = Allocate_Array_1D(len_Corr_Out);
     int idx_count = 0;
 
     for (int i=0;i<len_Corr_Out;++i)
@@ -658,12 +658,12 @@ int Packet_Selection(double complex* Corr_Out, int len_Corr_Out)
 
     }
 
-    double complex *packet_idx_arr_sliced = Allocate_Array_1D(idx_count);
+    float complex *packet_idx_arr_sliced = Allocate_Array_1D(idx_count);
 
     Slice_Repeater(packet_idx_arr,packet_idx_arr_sliced,0,0,idx_count,1);
 
 
-    double complex *temp = Allocate_Array_1D(idx_count+1);
+    float complex *temp = Allocate_Array_1D(idx_count+1);
 
     int a = 0, b = 0;
 
@@ -682,7 +682,7 @@ int Packet_Selection(double complex* Corr_Out, int len_Corr_Out)
         temp[i] = a-b;
     }
 
-    double complex *packet_front = Allocate_Array_1D(idx_count+1);
+    float complex *packet_front = Allocate_Array_1D(idx_count+1);
     int packet_front_count = 0;
 
     for(int j=0;j<idx_count+1;++j)
@@ -696,11 +696,11 @@ int Packet_Selection(double complex* Corr_Out, int len_Corr_Out)
     }
 
 
-    double complex *packet_front_sliced = Allocate_Array_1D(packet_front_count);
+    float complex *packet_front_sliced = Allocate_Array_1D(packet_front_count);
 
     Slice_Repeater(packet_front,packet_front_sliced,0,0,packet_front_count,1);
 
-    double complex *packet_front_idx = Allocate_Array_1D(packet_front_count);
+    float complex *packet_front_idx = Allocate_Array_1D(packet_front_count);
 
     for (int i = 0;i<packet_front_count;++i)
     {
@@ -730,12 +730,12 @@ int Packet_Selection(double complex* Corr_Out, int len_Corr_Out)
     return packet_idx;
 }
 
-void Coarse_CFO_Estimation(double complex* rx_frame, double complex* rx_frame_after_coarse, int rx_frame_size)
+void Coarse_CFO_Estimation(float complex* rx_frame, float complex* rx_frame_after_coarse, int rx_frame_size)
 {
     int Short_preamble_slot_length = 16;
     
-    double complex vec1[Short_preamble_slot_length];
-    double complex vec2[Short_preamble_slot_length];
+    float complex vec1[Short_preamble_slot_length];
+    float complex vec2[Short_preamble_slot_length];
     
     int start1 = Short_preamble_slot_length * 5;
     for (int i = 0; i < Short_preamble_slot_length; i++) 
@@ -749,13 +749,13 @@ void Coarse_CFO_Estimation(double complex* rx_frame, double complex* rx_frame_af
         vec2[i] = rx_frame[start2 + i];
     }
 
-    double complex prod_consq_frame_coarse = 0;
+    float complex prod_consq_frame_coarse = 0;
     for (int i = 0; i < Short_preamble_slot_length; i++) 
     {
         prod_consq_frame_coarse += vec1[i] * conj(vec2[i]);
     }
 
-    double freq_coarse_est = (-1.0 / (2 * PI * Short_preamble_slot_length * ts_sec)) *atan2(cimag(prod_consq_frame_coarse), creal(prod_consq_frame_coarse));
+    float freq_coarse_est = (-1.0 / (2 * PI * Short_preamble_slot_length * ts_sec)) *atan2(cimag(prod_consq_frame_coarse), creal(prod_consq_frame_coarse));
     
     for (int i = 0; i < rx_frame_size; i++) 
     {
@@ -763,7 +763,7 @@ void Coarse_CFO_Estimation(double complex* rx_frame, double complex* rx_frame_af
     }
 }
 
-void Fine_CFO_Estimation(double complex* rx_frame_after_coarse, double complex* rx_frame_after_fine, int rx_frame_size)
+void Fine_CFO_Estimation(float complex* rx_frame_after_coarse, float complex* rx_frame_after_fine, int rx_frame_size)
 {
     int Short_preamble_slot_length = 16;
 
@@ -771,34 +771,34 @@ void Fine_CFO_Estimation(double complex* rx_frame_after_coarse, double complex* 
     int start2 = Short_preamble_slot_length * 16;
     int length= Short_preamble_slot_length * 4;
 
-    double complex prod_consq_frame_fine = 0 + 0 * I;
+    float complex prod_consq_frame_fine = 0 + 0 * I;
 
     for (int i = 0; i < length; i++) 
     {
         prod_consq_frame_fine += rx_frame_after_coarse[start1 + i] * conj(rx_frame_after_coarse[start2 + i]);
     }
 
-    double freq_fine_est = (-1.0 / (2 * PI * 64 * ts_sec)) * atan2(cimag(prod_consq_frame_fine), creal(prod_consq_frame_fine));
+    float freq_fine_est = (-1.0 / (2 * PI * 64 * ts_sec)) * atan2(cimag(prod_consq_frame_fine), creal(prod_consq_frame_fine));
 
     for (int i = 0; i < rx_frame_size; i++) 
     {
-        double complex exp_term = cexp(-1.0 * I * 2 * PI * freq_fine_est * ts_sec * i);
+        float complex exp_term = cexp(-1.0 * I * 2 * PI * freq_fine_est * ts_sec * i);
         rx_frame_after_fine[i] = rx_frame_after_coarse[i] * exp_term;
     }    
 }
 
-void Channel_Estimation(double complex* rx_frame_after_fine, double complex* H_est, int rx_frame_size)
+void Channel_Estimation(float complex* rx_frame_after_fine, float complex* H_est, int rx_frame_size)
 {
     int Short_preamble_slot_length = 16;
 
-    double complex* Long_preamble_1 = Allocate_Array_1D(N_FFT);
-    double complex* Long_preamble_2 = Allocate_Array_1D(N_FFT);
+    float complex* Long_preamble_1 = Allocate_Array_1D(N_FFT);
+    float complex* Long_preamble_2 = Allocate_Array_1D(N_FFT);
 
     Slice_Repeater(rx_frame_after_fine, Long_preamble_1, 0, Short_preamble_slot_length * 12, Short_preamble_slot_length * 16, 1);
     Slice_Repeater(rx_frame_after_fine, Long_preamble_2, 0, Short_preamble_slot_length * 16, Short_preamble_slot_length * 20, 1);
 
-    double complex *Long_preamble_1_After_FFT = Allocate_Array_1D(N_FFT);
-    double complex *Long_preamble_2_After_FFT = Allocate_Array_1D(N_FFT);
+    float complex *Long_preamble_1_After_FFT = Allocate_Array_1D(N_FFT);
+    float complex *Long_preamble_2_After_FFT = Allocate_Array_1D(N_FFT);
     
     fft(Long_preamble_1, Long_preamble_1_After_FFT, N_FFT);
     fft(Long_preamble_2, Long_preamble_2_After_FFT, N_FFT);
@@ -809,13 +809,13 @@ void Channel_Estimation(double complex* rx_frame_after_fine, double complex* H_e
     }
 }
 
-void AGC_Receiver(double complex** Rx_Payload_No_Pilot, double complex** Rx_Payload_Final)
+void AGC_Receiver(float complex** Rx_Payload_No_Pilot, float complex** Rx_Payload_Final)
 {
     for(int i = 0; i < data_frames_number; ++i)
     {
        for(int j = 0; j < 48; ++j)
        {
-           double complex z = Rx_Payload_No_Pilot[i][j];
+           float complex z = Rx_Payload_No_Pilot[i][j];
 
            if(creal(z) > 0)
                Rx_Payload_Final[i][j] = 1.0/sqrt(2.0);
@@ -830,13 +830,13 @@ void AGC_Receiver(double complex** Rx_Payload_No_Pilot, double complex** Rx_Payl
     }
 }
 
-void QPSK_Demodulator(double complex **Rx_Payload, double complex **Data_Payload_Demod, int data_frames_number)
+void QPSK_Demodulator(float complex **Rx_Payload, float complex **Data_Payload_Demod, int data_frames_number)
 {
     for(int i = 0; i < data_frames_number; ++i)
     {
         for(int j = 0; j < 48; j++)
         {
-            double a = creal(Rx_Payload[i][j]), b = cimag(Rx_Payload[i][j]);
+            float a = creal(Rx_Payload[i][j]), b = cimag(Rx_Payload[i][j]);
 
             int c = 0, d = 0;
 
@@ -878,7 +878,7 @@ int Binary_To_Decimal(int* msg_bits)
     return res;
 }
 
-void Message_Generator(double complex* Data, char* msg_RX, int total_bits)
+void Message_Generator(float complex* Data, char* msg_RX, int total_bits)
 {
     int index = 0;
 
@@ -898,7 +898,7 @@ void Message_Generator(double complex* Data, char* msg_RX, int total_bits)
     }
 }
 
-void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_number, double* Res)
+void Receiver(float complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_number, float* Res)
 {
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Capturing Packets %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
@@ -910,7 +910,7 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
     // rx_start = 0; // To be removed
 
-    double complex* Rx_Signal = Allocate_Array_1D(len_Rx_Signal);
+    float complex* Rx_Signal = Allocate_Array_1D(len_Rx_Signal);
 
     Slice_Repeater(Tx_OTA_signal, Rx_Signal, 0, rx_start, rx_start + len_Rx_Signal, 1);
 
@@ -922,13 +922,13 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
 
     // Convolution
-    double complex *Rx_filter_signal = Convolution(Rx_Signal, RRC_Filter_Tx, len_inp_sig, len_RRC_Coeff);
+    float complex *Rx_filter_signal = Convolution(Rx_Signal, RRC_Filter_Tx, len_inp_sig, len_RRC_Coeff);
 
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Packet Detection %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
     int len_Corr_Out = 0;
 
-    double complex *Corr_Out = Packet_Detection(Rx_Signal, len_Rx_Signal, &len_Corr_Out);
+    float complex *Corr_Out = Packet_Detection(Rx_Signal, len_Rx_Signal, &len_Corr_Out);
 
     free(Rx_Signal);
 
@@ -944,7 +944,7 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
     int rx_frame_size = ((oversampling_rate * Data_Frame_Size + packet_idx - 1) - packet_idx) / oversampling_rate + 1;
 
-    double complex* rx_frame = Allocate_Array_1D(rx_frame_size);
+    float complex* rx_frame = Allocate_Array_1D(rx_frame_size);
 
     int index = 0;
 
@@ -958,7 +958,7 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Coarse CFO Estimation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
-    double complex* rx_frame_after_coarse = Allocate_Array_1D(rx_frame_size);
+    float complex* rx_frame_after_coarse = Allocate_Array_1D(rx_frame_size);
 
     Coarse_CFO_Estimation(rx_frame, rx_frame_after_coarse, rx_frame_size);
 
@@ -966,7 +966,7 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Fine CFO Estimation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
-    double complex* rx_frame_after_fine = Allocate_Array_1D(rx_frame_size);
+    float complex* rx_frame_after_fine = Allocate_Array_1D(rx_frame_size);
 
     Fine_CFO_Estimation(rx_frame_after_coarse, rx_frame_after_fine, rx_frame_size);
 
@@ -974,13 +974,13 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Channel Estimation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
-    double complex* H_est = Allocate_Array_1D(64); // Size = Short Preamble Slot Length * 4 amd Short Preamble Slot Length = 16
+    float complex* H_est = Allocate_Array_1D(64); // Size = Short Preamble Slot Length * 4 amd Short Preamble Slot Length = 16
 
     Channel_Estimation(rx_frame_after_fine, H_est, rx_frame_size);
 
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% One Tap Equalizer %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
-    double complex** Rx_Payload_Time = Allocate_Array_2D(data_frames_number, N_FFT); // Extracting Rx_Payload_Time and removing circular prefix from it in this step
+    float complex** Rx_Payload_Time = Allocate_Array_2D(data_frames_number, N_FFT); // Extracting Rx_Payload_Time and removing circular prefix from it in this step
 
     for(int i = 0; i < data_frames_number; ++i)
     {
@@ -991,7 +991,7 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
     free(rx_frame_after_fine);
 
-    double complex** Rx_Payload_Frequency = Allocate_Array_2D(data_frames_number, N_FFT);
+    float complex** Rx_Payload_Frequency = Allocate_Array_2D(data_frames_number, N_FFT);
 
     for(int i = 0; i < data_frames_number; ++i)
     {
@@ -1000,7 +1000,7 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
     Deallocate_Array_2D(Rx_Payload_Time, data_frames_number);
 
-    double complex** Rx_Payload_Frequency_Equalizer = Allocate_Array_2D(data_frames_number, N_FFT);
+    float complex** Rx_Payload_Frequency_Equalizer = Allocate_Array_2D(data_frames_number, N_FFT);
 
     for(int i = 0; i < data_frames_number; ++i)
     {
@@ -1015,7 +1015,7 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% De Mapping %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
-    double complex** Rx_Payload_No_Pilot = Allocate_Array_2D(data_frames_number, 48);
+    float complex** Rx_Payload_No_Pilot = Allocate_Array_2D(data_frames_number, 48);
 
     for(int i = 0; i < data_frames_number; ++i)
     {
@@ -1031,13 +1031,13 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
      //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% AGC for RX_Data_Payload %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
-    double complex** Rx_Payload_Final = Allocate_Array_2D(data_frames_number, 48);
+    float complex** Rx_Payload_Final = Allocate_Array_2D(data_frames_number, 48);
 
     AGC_Receiver(Rx_Payload_No_Pilot, Rx_Payload_Final);
 
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% QPSK Demodulation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
-    double complex** Rx_Payload_Demod = Allocate_Array_2D(data_frames_number, 96);
+    float complex** Rx_Payload_Demod = Allocate_Array_2D(data_frames_number, 96);
 
     QPSK_Demodulator(Rx_Payload_Final, Rx_Payload_Demod, data_frames_number);
 
@@ -1045,7 +1045,7 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
     int total_bits = data_frames_number * 96;
 
-    double complex* Data_Rx = Allocate_Array_1D(total_bits);
+    float complex* Data_Rx = Allocate_Array_1D(total_bits);
 
     index = 0;
 
@@ -1062,9 +1062,9 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% EVM Calculation (Before AGC) %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
-    double complex error = 0;
+    float complex error = 0;
     
-    double error_square_sum = 0, data_payload_square_sum = 0;
+    float error_square_sum = 0, data_payload_square_sum = 0;
     
     for(int i = 0; i < data_frames_number; ++i)
     {
@@ -1078,7 +1078,7 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
     Deallocate_Array_2D(Rx_Payload_No_Pilot, data_frames_number);
 
-    double evm = 0, evm_dB = 0;
+    float evm = 0, evm_dB = 0;
 
     evm = sqrt(error_square_sum / (data_frames_number * 48)) / sqrt(data_payload_square_sum / (data_frames_number * 48));
 
@@ -1102,7 +1102,7 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
     Deallocate_Array_2D(Rx_Payload_Final, data_frames_number);
 
-    double evm_AGC = 0, evm_AGC_dB = 0;
+    float evm_AGC = 0, evm_AGC_dB = 0;
 
     evm_AGC = sqrt(error_square_sum / (data_frames_number * 48)) / sqrt(data_payload_square_sum / (data_frames_number * 48));
 
@@ -1110,7 +1110,7 @@ void Receiver(double complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_
 
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% BER Calculation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
-    double sum = 0, ber = 0;
+    float sum = 0, ber = 0;
 
     for(int i = 0; i < total_bits; ++i)
     {
@@ -1147,26 +1147,26 @@ int main()
 {
     srand(time(NULL));
 
-    double complex* TX_signal_repeated = Transmitter();
+    float complex* TX_signal_repeated = Transmitter();
 
-    double SNR[num_snr];
+    float SNR[num_snr];
 
     for(int i = 0; i < num_snr; ++i)
     {
-        SNR[i] = 5 + i;
+        SNR[i] = 6 + i;
     }
 
-    double EVM_dB[num_snr], EVM_AGC_dB[num_snr], BER[num_snr];
+    float EVM_dB[num_snr], EVM_AGC_dB[num_snr], BER[num_snr];
 
     for(int i = 0; i < num_snr; ++i)
     {
         printf("\n\nFor SNR = %lf \n", SNR[i]);
 
-        double complex* Tx_OTA_signal = Allocate_Array_1D(len_Tx_Signal_repeated);  
+        float complex* Tx_OTA_signal = Allocate_Array_1D(len_Tx_Signal_repeated);  
 
         Transmission_Over_Air(TX_signal_repeated, Tx_OTA_signal, SNR[i], len_Tx_Signal_repeated);
         
-        double Res[3]; // EVM_dB, EVM_AGC_DB, BER
+        float Res[3]; // EVM_dB, EVM_AGC_DB, BER
         Receiver(Tx_OTA_signal, len_Tx_Signal_repeated, data_frames_number, Res);
 
         free(Tx_OTA_signal);
@@ -1184,10 +1184,10 @@ int main()
     free(Data);
     Deallocate_Array_2D(Data_Payload_Mod, data_frames_number);
 
-    write_double_array_to_file(SNR, num_snr, "Output_SNR.txt");
-    write_double_array_to_file(EVM_dB, num_snr, "Output_EVM_AGC.txt");
-    write_double_array_to_file(EVM_AGC_dB, num_snr, "Output_EVM_AGC_DB.txt");
-    write_double_array_to_file(BER, num_snr, "Output_BER.txt");
+    write_float_array_to_file(SNR, num_snr, "data/Output_SNR.txt");
+    write_float_array_to_file(EVM_dB, num_snr, "data/Output_EVM_AGC.txt");
+    write_float_array_to_file(EVM_AGC_dB, num_snr, "data/Output_EVM_AGC_DB.txt");
+    write_float_array_to_file(BER, num_snr, "data/Output_BER.txt");
 
     printf("\nCode Run Successful!");
 
