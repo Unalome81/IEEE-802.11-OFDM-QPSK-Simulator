@@ -17,7 +17,7 @@
 #define ts_sec (1/fs_hz)  // Time period (50 ns)
 #define num_snr 35
 
-unsigned char message[] = "Hello, I am Vivaswan!";
+unsigned char message[] = "Hey! I am Vivaswan";
 //"The Supreme Lord Shree Krishna said: I taught this eternal science of Yog to the Sun God, Vivasvan, who passed it on to Manu; and Manu, in turn, instructed it to Ikshvaku.";
 
 
@@ -34,6 +34,44 @@ float complex RRC_Filter_Tx[21] = {-0.000454720514876223, 0.00353689555574986, -
 float complex Long_preamble_slot_Frequency[N_FFT]; // Size = N_FFT
 
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Helper Functions for Debugging %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
+
+void Word_Optimization_Analysis(float complex *X, int sz)
+{
+    float min_val = 1e9, max_val = -1e9;  
+
+    for (int i = 0; i < sz; i++) 
+    {
+        float real_part = crealf(X[i]);
+        float imag_part = cimagf(X[i]);
+
+        if (real_part < min_val) min_val = real_part;
+        if (real_part > max_val) max_val = real_part;
+        if (imag_part < min_val) min_val = imag_part;
+        if (imag_part > max_val) max_val = imag_part;
+    }
+
+    float max_absolute = fmax(fabs(min_val), fabs(max_val));
+
+    int bits_required;
+    if (max_absolute < 1.0f) 
+    {
+        bits_required = 1; 
+    } 
+    else 
+    {
+        bits_required = (int)ceil(log2(max_absolute)) + 1; 
+    }
+
+    printf("==========================================\n");
+    printf("Word Optimization Analysis Report:\n");
+    printf("------------------------------------------\n");
+    printf("Minimum value found: %f\n", min_val);
+    printf("Maximum value found: %f\n", max_val);
+    printf("Maximum absolute magnitude: %f\n", max_absolute);
+    printf("Minimum integer bits required: %d\n", bits_required);
+    printf("==========================================\n\n");
+}
+
 
 void Display(float complex *X, int sz)
 {
@@ -319,6 +357,8 @@ float complex* Convolution(float complex *Inp, float complex *H, int len_Inp, in
             Out[i + j] += Inp[i] * H[j];  
         }
     }
+
+    printf("%d %d", len_Inp, len_Out);
 
     return Out; 
 }
@@ -924,6 +964,7 @@ void Receiver(float complex* Tx_OTA_signal, int len_Tx_Signal, int data_frames_n
     // Convolution
     float complex *Rx_filter_signal = Convolution(Rx_Signal, RRC_Filter_Tx, len_inp_sig, len_RRC_Coeff);
 
+    Word_Optimization_Analysis(Rx_filter_signal, len_out_sig);
     //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Packet Detection %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
 
     int len_Corr_Out = 0;
